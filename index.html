@@ -81,9 +81,9 @@
         return { name: (f.name || "").trim(), date: f.date, time: f.time || "12:00", timeKnown: !!f.time, gender: f.gender || "", place: f.place || PLACES[0][0], lat: p[1], lon: p[2], utcOffset: 9 };
       };
 
-      // ── AI占い師チャット（自分専用・ブラウザから Claude を直接呼ぶ）──
-      // APIキーはこの端末の localStorage にのみ保存。相談時のみ命式と相談文を Claude に送信する。
-      const KEY_STORE = "meishiki-note:anthropic-key";
+      // ── AI占い師チャット（自分専用・ブラウザから Google Gemini を直接呼ぶ）──
+      // APIキーはこの端末の localStorage にのみ保存。相談時のみ命式と相談文を Gemini に送信する。
+      const KEY_STORE = "meishiki-note:gemini-key";
       const loadKey = () => { try { return localStorage.getItem(KEY_STORE) || ""; } catch { return ""; } };
       const saveKey = (k) => { try { localStorage.setItem(KEY_STORE, k); } catch {} };
       const clearKey = () => { try { localStorage.removeItem(KEY_STORE); } catch {} };
@@ -110,23 +110,22 @@
         return lines.join("\n");
       }
 
-      // Claude Messages API をブラウザから直接呼ぶ（自分専用前提）
-      async function callClaude(apiKey, system, messages) {
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
+      // Google Gemini API をブラウザから直接呼ぶ（無料枠・自分専用前提）
+      const GEMINI_MODEL = "gemini-2.5-flash";
+      async function callGemini(apiKey, system, messages) {
+        // Gemini のロールは user / model（assistant→model に変換）
+        const contents = messages.map((m) => ({
+          role: m.role === "assistant" ? "model" : "user",
+          parts: [{ text: m.content }],
+        }));
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+        const res = await fetch(url, {
           method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
-            "anthropic-dangerous-direct-browser-access": "true",
-          },
+          headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            model: "claude-sonnet-4-6",
-            max_tokens: 1500,
-            thinking: { type: "disabled" },
-            output_config: { effort: "low" },
-            system,
-            messages,
+            systemInstruction: { parts: [{ text: system }] },
+            contents,
+            generationConfig: { maxOutputTokens: 1500, temperature: 0.9 },
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -134,7 +133,17 @@
           const msg = (data && data.error && data.error.message) || `エラー (HTTP ${res.status})`;
           throw new Error(msg);
         }
-        return (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+        const cand = (data.candidates || [])[0];
+        if (!cand) {
+          const br = data.promptFeedback && data.promptFeedback.blockReason;
+          throw new Error(br ? `安全フィルタによりブロックされました（${br}）` : "回答が空でした");
+        }
+        const text = ((cand.content && cand.content.parts) || []).map((p) => p.text || "").join("").trim();
+        if (!text) {
+          const fr = cand.finishReason;
+          throw new Error(fr && fr !== "STOP" ? `回答が途中で停止しました（${fr}）` : "回答が空でした");
+        }
+        return text;
       }
 
       const inp = { width: "100%", padding: "11px 12px", marginBottom: 10, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, color: C.text, fontSize: 15 };
@@ -350,7 +359,7 @@ ${context}
           const next = [...msgs, { role: "user", content: q }];
           setMsgs(next); setBusy(true);
           try {
-            const reply = await callClaude(apiKey, system, next);
+            const reply = await callGemini(apiKey, system, next);
             setMsgs([...next, { role: "assistant", content: reply || "（回答が空でした）" }]);
           } catch (e) {
             setErr(String(e.message || e));
@@ -361,19 +370,19 @@ ${context}
         if (!apiKey) {
           return html`<div>
             <div style=${{ fontSize: 13, color: C.sub, lineHeight: 1.7, marginBottom: 10 }}>
-              あなたの命式を踏まえて、占い師に直接相談できます。利用には <b style=${{ color: C.text }}>Anthropic の APIキー</b> が必要です（${"https://console.anthropic.com"} で取得）。
+              あなたの命式を踏まえて、占い師に直接相談できます。利用には <b style=${{ color: C.text }}>Google Gemini の APIキー</b> が必要です（${"https://aistudio.google.com/apikey"} で無料取得・カード不要）。
             </div>
             <div style=${{ fontSize: 12, color: C.accent, background: C.accent + "14", border: `1px solid ${C.accent}55`, borderRadius: 8, padding: "8px 10px", marginBottom: 10, lineHeight: 1.7 }}>
-              ⚠️ キーは<b>この端末（ブラウザ）にのみ</b>保存されます。相談を送ると、<b>命式と相談内容が Claude（Anthropic）に送信</b>されます（占いの計算自体は従来どおり端末内で完結）。料金はご自身のAPI利用分（Sonnet 4.6・1往復およそ数円）。
+              ⚠️ キーは<b>この端末（ブラウザ）にのみ</b>保存されます。相談を送ると、<b>命式と相談内容が Gemini（Google）に送信</b>されます（占いの計算自体は従来どおり端末内で完結）。Google AI Studio の<b>無料枠</b>で使えます（上限は Google の規定に従います）。
             </div>
-            <input type="password" placeholder="sk-ant-..." value=${draft} onInput=${(e) => setDraft(e.target.value)} style=${inp} />
+            <input type="password" placeholder="AIza..." value=${draft} onInput=${(e) => setDraft(e.target.value)} style=${inp} />
             <button onClick=${() => { if (draft.trim()) onSaveKey(draft.trim()); }} style=${{ ...inp, marginBottom: 0, background: C.green, color: "#0B0D11", fontWeight: 700, border: "none", cursor: "pointer" }}>キーを保存して相談を始める</button>
           </div>`;
         }
 
         return html`<div>
           <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <div style=${{ fontSize: 12, color: C.faint }}>🔮 ${name ? name + " さん専属の占い師" : "あなた専属の占い師"}（Sonnet 4.6）</div>
+            <div style=${{ fontSize: 12, color: C.faint }}>🔮 ${name ? name + " さん専属の占い師" : "あなた専属の占い師"}（Gemini）</div>
             <button onClick=${() => setShowKey(!showKey)} style=${{ background: "none", border: "none", color: C.faint, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>キー設定</button>
           </div>
           ${showKey && html`<div style=${{ background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 12, color: C.sub }}>
@@ -394,7 +403,7 @@ ${context}
             ${busy && html`<div style=${{ alignSelf: "flex-start", fontSize: 13, color: C.faint, padding: "4px 2px" }}>🔮 占っています…</div>`}
           </div>`}
 
-          ${err && html`<div style=${{ fontSize: 13, color: C.red, marginBottom: 8, lineHeight: 1.6 }}>エラー：${err}${/401|authentication|x-api-key/i.test(err) ? "（APIキーを確認してください）" : ""}</div>`}
+          ${err && html`<div style=${{ fontSize: 13, color: C.red, marginBottom: 8, lineHeight: 1.6 }}>エラー：${err}${/api[_ ]?key|invalid|denied|401|403|permission/i.test(err) ? "（APIキーを確認してください）" : ""}</div>`}
 
           <div style=${{ display: "flex", gap: 8 }}>
             <input placeholder="相談したいことを入力…" value=${input} onInput=${(e) => setInput(e.target.value)} onKeyDown=${(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} style=${{ ...inp, marginBottom: 0, flex: 1 }} />
@@ -529,7 +538,7 @@ ${context}
             ${data.chart && html`<${Section} title="西洋・インド占星術" color=${C.accent}>
               <${AstroSummary} chart=${data.chart} />
             <//>`}
-            <div style=${{ fontSize: 11, color: C.faint, textAlign: "center", marginTop: 10, lineHeight: 1.6 }}>占いとして参考程度に。占いの計算・保存はすべて端末内で完結します。AI相談を使う場合のみ、命式と相談内容を Claude に送信します。</div>
+            <div style=${{ fontSize: 11, color: C.faint, textAlign: "center", marginTop: 10, lineHeight: 1.6 }}>占いとして参考程度に。占いの計算・保存はすべて端末内で完結します。AI相談を使う場合のみ、命式と相談内容を Gemini（Google）に送信します。</div>
           </div>`}
         </div>`;
       }
