@@ -61,6 +61,18 @@
         ["鹿児島", 31.56, 130.56], ["沖縄", 26.21, 127.68],
       ];
 
+      // 入力（生年月日など）は端末内の localStorage にのみ保存。外部送信はしない。
+      const STORAGE_KEY = "meishiki-note:v1";
+      const loadSaved = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch { return null; } };
+      const saveForm = (f) => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(f)); } catch {} };
+      const clearSaved = () => { try { localStorage.removeItem(STORAGE_KEY); } catch {} };
+      // フォーム入力から鑑定用の birth オブジェクトを組み立てる（出生地→緯度経度を解決）。
+      const buildBirth = (f) => {
+        if (!f || !f.date) return null;
+        const p = PLACES.find((x) => x[0] === f.place) || PLACES[0];
+        return { name: (f.name || "").trim(), date: f.date, time: f.time || "12:00", timeKnown: !!f.time, gender: f.gender || "", place: f.place || PLACES[0][0], lat: p[1], lon: p[2], utcOffset: 9 };
+      };
+
       const inp = { width: "100%", padding: "11px 12px", marginBottom: 10, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, color: C.text, fontSize: 15 };
       const card = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16, marginBottom: 14 };
 
@@ -222,14 +234,20 @@
       }
 
       function App() {
-        const [form, setForm] = useState({ name: "", date: "", time: "", gender: "", place: "東京" });
-        const [birth, setBirth] = useState(null);
+        // 保存済みがあれば初期値として復元（次回以降は自動入力＆自動鑑定）。
+        const [form, setForm] = useState(() => ({ name: "", date: "", time: "", gender: "", place: "東京", ...(loadSaved() || {}) }));
+        const [birth, setBirth] = useState(() => buildBirth(loadSaved()));
+        const [saved, setSaved] = useState(() => !!loadSaved());
         const [err, setErr] = useState("");
         const submit = () => {
           setErr("");
           if (!form.date) { setErr("生年月日を入れてください"); return; }
-          const p = PLACES.find((x) => x[0] === form.place) || PLACES[0];
-          setBirth({ name: form.name.trim(), date: form.date, time: form.time || "12:00", timeKnown: !!form.time, gender: form.gender, place: form.place, lat: p[1], lon: p[2], utcOffset: 9 });
+          saveForm(form); setSaved(true);
+          setBirth(buildBirth(form));
+        };
+        const clear = () => {
+          clearSaved(); setSaved(false); setErr("");
+          setForm({ name: "", date: "", time: "", gender: "", place: "東京" }); setBirth(null);
         };
         const data = useMemo(() => {
           if (!birth) return null;
@@ -270,7 +288,13 @@
                 </select>
               </div>
             </div>
-            <button onClick=${submit} style=${{ ...inp, marginBottom: 0, background: C.accent, color: "#0B0D11", fontWeight: 700, border: "none", cursor: "pointer", fontSize: 16 }}>鑑定する</button>
+            <div style=${{ display: "flex", gap: 8 }}>
+              <button onClick=${submit} style=${{ ...inp, marginBottom: 0, flex: 1, background: C.accent, color: "#0B0D11", fontWeight: 700, border: "none", cursor: "pointer", fontSize: 16 }}>鑑定する</button>
+              ${saved && html`<button onClick=${clear} title="保存した情報を消す" style=${{ ...inp, marginBottom: 0, width: 104, background: "transparent", color: C.sub, border: `1px solid ${C.line}`, cursor: "pointer", fontSize: 14 }}>保存を消去</button>`}
+            </div>
+            ${saved
+              ? html`<div style=${{ fontSize: 11, color: C.green, marginTop: 6 }}>✓ この端末に保存済み（次回から自動で復元・外部送信なし）</div>`
+              : html`<div style=${{ fontSize: 11, color: C.faint, marginTop: 6 }}>「鑑定する」を押すと、この端末にだけ情報を保存します（外部送信なし）。</div>`}
             ${err && html`<div style=${{ fontSize: 13, color: C.red, marginTop: 8 }}>${err}</div>`}
           </div>
 
