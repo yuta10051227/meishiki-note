@@ -62,10 +62,18 @@
       ];
 
       // 入力（生年月日など）は端末内の localStorage にのみ保存。外部送信はしない。
-      const STORAGE_KEY = "meishiki-note:v1";
-      const loadSaved = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch { return null; } };
-      const saveForm = (f) => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(f)); } catch {} };
-      const clearSaved = () => { try { localStorage.removeItem(STORAGE_KEY); } catch {} };
+      // v2: 複数プロフィールをリストで保持し、名前で切り替えられる。
+      const STORE_KEY = "meishiki-note:v2";
+      const DEFAULT_FORM = { name: "", date: "", time: "", gender: "", place: "東京" };
+      const newId = () => "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      const labelOf = (p) => (p && (p.name || p.date)) || "無題";
+      const loadStore = () => {
+        try { const s = JSON.parse(localStorage.getItem(STORE_KEY) || "null"); if (s && Array.isArray(s.profiles)) return s; } catch {}
+        // 旧 v1（単一保存）からの移行
+        try { const v1 = JSON.parse(localStorage.getItem("meishiki-note:v1") || "null"); if (v1 && v1.date) { const id = newId(); return { profiles: [{ id, ...DEFAULT_FORM, ...v1 }], currentId: id }; } } catch {}
+        return { profiles: [], currentId: null };
+      };
+      const saveStore = (s) => { try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch {} };
       // フォーム入力から鑑定用の birth オブジェクトを組み立てる（出生地→緯度経度を解決）。
       const buildBirth = (f) => {
         if (!f || !f.date) return null;
@@ -234,20 +242,40 @@
       }
 
       function App() {
-        // 保存済みがあれば初期値として復元（次回以降は自動入力＆自動鑑定）。
-        const [form, setForm] = useState(() => ({ name: "", date: "", time: "", gender: "", place: "東京", ...(loadSaved() || {}) }));
-        const [birth, setBirth] = useState(() => buildBirth(loadSaved()));
-        const [saved, setSaved] = useState(() => !!loadSaved());
+        // 複数プロフィールを保持。選択中があれば初期値として復元（自動入力＆自動鑑定）。
+        const [store, setStore] = useState(loadStore);
+        const initial = store.profiles.find((p) => p.id === store.currentId) || null;
+        const [form, setForm] = useState(() => ({ ...DEFAULT_FORM, ...(initial || {}) }));
+        const [birth, setBirth] = useState(() => buildBirth(initial));
+        const [editingId, setEditingId] = useState(() => (initial ? initial.id : null));
         const [err, setErr] = useState("");
+
+        const persist = (next) => { setStore(next); saveStore(next); };
+
         const submit = () => {
           setErr("");
           if (!form.date) { setErr("生年月日を入れてください"); return; }
-          saveForm(form); setSaved(true);
+          const id = editingId || newId();
+          const entry = { id, name: form.name || "", date: form.date, time: form.time || "", gender: form.gender || "", place: form.place || DEFAULT_FORM.place };
+          const exists = store.profiles.some((p) => p.id === id);
+          const profiles = exists ? store.profiles.map((p) => (p.id === id ? entry : p)) : [...store.profiles, entry];
+          persist({ profiles, currentId: id });
+          setEditingId(id);
           setBirth(buildBirth(form));
         };
-        const clear = () => {
-          clearSaved(); setSaved(false); setErr("");
-          setForm({ name: "", date: "", time: "", gender: "", place: "東京" }); setBirth(null);
+        const selectProfile = (id) => {
+          const p = store.profiles.find((x) => x.id === id); if (!p) return;
+          setErr(""); setForm({ ...DEFAULT_FORM, ...p }); setEditingId(id); setBirth(buildBirth(p));
+          persist({ ...store, currentId: id });
+        };
+        const startNew = () => {
+          setErr(""); setForm({ ...DEFAULT_FORM }); setEditingId(null); setBirth(null);
+          persist({ ...store, currentId: null });
+        };
+        const deleteProfile = (id) => {
+          const profiles = store.profiles.filter((p) => p.id !== id);
+          persist({ profiles, currentId: store.currentId === id ? null : store.currentId });
+          if (editingId === id) { setEditingId(null); setForm({ ...DEFAULT_FORM }); setBirth(null); }
         };
         const data = useMemo(() => {
           if (!birth) return null;
@@ -269,6 +297,16 @@
           </div>
 
           <div style=${card}>
+            ${store.profiles.length > 0 && html`<div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+              ${store.profiles.map((p) => {
+                const on = p.id === editingId;
+                return html`<span key=${p.id} style=${{ display: "inline-flex", alignItems: "center", background: on ? C.purple + "22" : C.panel2, border: `1px solid ${on ? C.purple : C.line}`, borderRadius: 999, padding: "3px 4px 3px 11px" }}>
+                  <button onClick=${() => selectProfile(p.id)} style=${{ background: "none", border: "none", color: on ? C.purple : C.text, cursor: "pointer", fontSize: 13, padding: 0, fontWeight: on ? 700 : 400 }}>${labelOf(p)}</button>
+                  <button onClick=${() => deleteProfile(p.id)} title="削除" style=${{ background: "none", border: "none", color: C.faint, cursor: "pointer", fontSize: 15, lineHeight: 1, padding: "0 4px" }}>×</button>
+                </span>`;
+              })}
+              <button onClick=${startNew} style=${{ background: "none", border: `1px dashed ${C.line}`, color: C.sub, borderRadius: 999, padding: "4px 12px", fontSize: 13, cursor: "pointer" }}>＋ 新規</button>
+            </div>`}
             <input placeholder="名前（任意）" value=${form.name} onInput=${(e) => setForm({ ...form, name: e.target.value })} style=${inp} />
             <label style=${{ fontSize: 12, color: C.sub, display: "block", marginBottom: 2 }}>生年月日</label>
             <input type="date" value=${form.date} onInput=${(e) => setForm({ ...form, date: e.target.value })} style=${inp} />
@@ -288,13 +326,12 @@
                 </select>
               </div>
             </div>
-            <div style=${{ display: "flex", gap: 8 }}>
-              <button onClick=${submit} style=${{ ...inp, marginBottom: 0, flex: 1, background: C.accent, color: "#0B0D11", fontWeight: 700, border: "none", cursor: "pointer", fontSize: 16 }}>鑑定する</button>
-              ${saved && html`<button onClick=${clear} title="保存した情報を消す" style=${{ ...inp, marginBottom: 0, width: 104, background: "transparent", color: C.sub, border: `1px solid ${C.line}`, cursor: "pointer", fontSize: 14 }}>保存を消去</button>`}
+            <button onClick=${submit} style=${{ ...inp, marginBottom: 0, width: "100%", background: C.accent, color: "#0B0D11", fontWeight: 700, border: "none", cursor: "pointer", fontSize: 16 }}>${editingId ? "更新して鑑定" : "鑑定して保存"}</button>
+            <div style=${{ fontSize: 11, color: C.faint, marginTop: 6 }}>
+              ${store.profiles.length > 0
+                ? "上のタブで保存した人を切り替え・削除できます。「＋新規」で別の人を登録。保存は端末内のみ（外部送信なし）。"
+                : "「鑑定して保存」でこの端末に保存します。家族・友人など複数人ぶん登録できます（外部送信なし）。"}
             </div>
-            ${saved
-              ? html`<div style=${{ fontSize: 11, color: C.green, marginTop: 6 }}>✓ この端末に保存済み（次回から自動で復元・外部送信なし）</div>`
-              : html`<div style=${{ fontSize: 11, color: C.faint, marginTop: 6 }}>「鑑定する」を押すと、この端末にだけ情報を保存します（外部送信なし）。</div>`}
             ${err && html`<div style=${{ fontSize: 13, color: C.red, marginTop: 8 }}>${err}</div>`}
           </div>
 
