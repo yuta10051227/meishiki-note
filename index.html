@@ -81,6 +81,62 @@
         return { name: (f.name || "").trim(), date: f.date, time: f.time || "12:00", timeKnown: !!f.time, gender: f.gender || "", place: f.place || PLACES[0][0], lat: p[1], lon: p[2], utcOffset: 9 };
       };
 
+      // ── AI占い師チャット（自分専用・ブラウザから Claude を直接呼ぶ）──
+      // APIキーはこの端末の localStorage にのみ保存。相談時のみ命式と相談文を Claude に送信する。
+      const KEY_STORE = "meishiki-note:anthropic-key";
+      const loadKey = () => { try { return localStorage.getItem(KEY_STORE) || ""; } catch { return ""; } };
+      const saveKey = (k) => { try { localStorage.setItem(KEY_STORE, k); } catch {} };
+      const clearKey = () => { try { localStorage.removeItem(KEY_STORE); } catch {} };
+
+      // 命式・算命学の読みを「鑑定の根拠」テキストにまとめる（システムプロンプトに渡す）
+      function buildOracleContext(data, birth) {
+        const lines = [];
+        if (birth && birth.name) lines.push(`相談者: ${birth.name} さん`);
+        if (data.chart && data.chart.text) lines.push(data.chart.text);
+        const d = data.detail;
+        if (d) {
+          if (d.center) lines.push(`算命学・中心星（本質）: ${d.center.star}（${d.center.title}）— ${d.center.desc}`);
+          if (d.dayType) lines.push(`日干タイプ: ${d.dayType.label} — ${d.dayType.desc}`);
+        }
+        const a = data.advisor;
+        if (a) {
+          if (a.fiveElements) lines.push(`五行バランス: 強「${a.fiveElements.strong}」／弱「${a.fiveElements.weak}」`);
+          const fmt = (x) => `${x.headline}｜${(x.points || []).join(" / ")}`;
+          if (a.business) lines.push(`【ビジネス】${fmt(a.business)}`);
+          if (a.love) lines.push(`【人間関係】${fmt(a.love)}`);
+          if (a.health) lines.push(`【健康】${fmt(a.health)}`);
+          if (a.today) lines.push(`【今日】${fmt(a.today)}`);
+        }
+        return lines.join("\n");
+      }
+
+      // Claude Messages API をブラウザから直接呼ぶ（自分専用前提）
+      async function callClaude(apiKey, system, messages) {
+        const res = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true",
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-6",
+            max_tokens: 1500,
+            thinking: { type: "disabled" },
+            output_config: { effort: "low" },
+            system,
+            messages,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const msg = (data && data.error && data.error.message) || `エラー (HTTP ${res.status})`;
+          throw new Error(msg);
+        }
+        return (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+      }
+
       const inp = { width: "100%", padding: "11px 12px", marginBottom: 10, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, color: C.text, fontSize: 15 };
       const card = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16, marginBottom: 14 };
 
@@ -261,6 +317,92 @@
         </div>`;
       }
 
+      // ── AI占い師チャット UI ──
+      const ORACLE_SUGGESTIONS = [
+        "今の私に向いている仕事や働き方は？",
+        "人間関係で気をつけるといいことは？",
+        "最近の体調管理のヒントが欲しい",
+        "今日〜今週の過ごし方のアドバイスを",
+      ];
+      function Chat({ apiKey, onSaveKey, onClearKey, context, name }) {
+        const [msgs, setMsgs] = useState([]);
+        const [input, setInput] = useState("");
+        const [busy, setBusy] = useState(false);
+        const [err, setErr] = useState("");
+        const [draft, setDraft] = useState("");
+        const [showKey, setShowKey] = useState(false);
+
+        const system = `あなたは、相談者の専属の超一流の占術師・算命学師です。算命学・四柱推命・西洋占星術・インド占星術に精通し、ビジネス・お金・恋愛や人間関係・健康・人生全般の相談に、的確かつ温かく寄り添って答えます。
+
+# 相談者の命式（鑑定の根拠。必ずこれに基づいて答えること）
+${context}
+
+# 回答のルール
+- 上の命式・星の配置を根拠に、具体的で実用的なアドバイスを返す。占い用語は噛み砕いて説明する。
+- 断定しすぎず、相談者の背中をやさしく押す前向きなトーンで。
+- 健康の話題は「算命学の五行に基づく養生の目安」であり医療的診断ではない旨を必ず添え、深刻・継続する不調は医療機関の受診を勧める。
+- 日本語で、読みやすく簡潔に（必要十分な長さで）。`;
+
+        const send = async (text) => {
+          const q = (text != null ? text : input).trim();
+          if (!q || busy) return;
+          setErr(""); setInput("");
+          const next = [...msgs, { role: "user", content: q }];
+          setMsgs(next); setBusy(true);
+          try {
+            const reply = await callClaude(apiKey, system, next);
+            setMsgs([...next, { role: "assistant", content: reply || "（回答が空でした）" }]);
+          } catch (e) {
+            setErr(String(e.message || e));
+          } finally { setBusy(false); }
+        };
+
+        // APIキー未設定：入力フォームを出す
+        if (!apiKey) {
+          return html`<div>
+            <div style=${{ fontSize: 13, color: C.sub, lineHeight: 1.7, marginBottom: 10 }}>
+              あなたの命式を踏まえて、占い師に直接相談できます。利用には <b style=${{ color: C.text }}>Anthropic の APIキー</b> が必要です（${"https://console.anthropic.com"} で取得）。
+            </div>
+            <div style=${{ fontSize: 12, color: C.accent, background: C.accent + "14", border: `1px solid ${C.accent}55`, borderRadius: 8, padding: "8px 10px", marginBottom: 10, lineHeight: 1.7 }}>
+              ⚠️ キーは<b>この端末（ブラウザ）にのみ</b>保存されます。相談を送ると、<b>命式と相談内容が Claude（Anthropic）に送信</b>されます（占いの計算自体は従来どおり端末内で完結）。料金はご自身のAPI利用分（Sonnet 4.6・1往復およそ数円）。
+            </div>
+            <input type="password" placeholder="sk-ant-..." value=${draft} onInput=${(e) => setDraft(e.target.value)} style=${inp} />
+            <button onClick=${() => { if (draft.trim()) onSaveKey(draft.trim()); }} style=${{ ...inp, marginBottom: 0, background: C.green, color: "#0B0D11", fontWeight: 700, border: "none", cursor: "pointer" }}>キーを保存して相談を始める</button>
+          </div>`;
+        }
+
+        return html`<div>
+          <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div style=${{ fontSize: 12, color: C.faint }}>🔮 ${name ? name + " さん専属の占い師" : "あなた専属の占い師"}（Sonnet 4.6）</div>
+            <button onClick=${() => setShowKey(!showKey)} style=${{ background: "none", border: "none", color: C.faint, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>キー設定</button>
+          </div>
+          ${showKey && html`<div style=${{ background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 12, color: C.sub }}>
+            APIキーはこの端末に保存中。<button onClick=${() => { onClearKey(); setMsgs([]); }} style=${{ background: "none", border: "none", color: C.red, cursor: "pointer", textDecoration: "underline", fontSize: 12 }}>キーを削除する</button>
+          </div>`}
+
+          ${msgs.length === 0 && html`<div style=${{ marginBottom: 10 }}>
+            <div style=${{ fontSize: 12, color: C.faint, marginBottom: 6 }}>例えばこんなことを聞けます：</div>
+            <div style=${{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              ${ORACLE_SUGGESTIONS.map((s, i) => html`<button key=${i} onClick=${() => send(s)} disabled=${busy} style=${{ background: C.panel2, border: `1px dashed ${C.line}`, color: C.sub, borderRadius: 999, padding: "5px 11px", fontSize: 12, cursor: busy ? "default" : "pointer" }}>${s}</button>`)}
+            </div>
+          </div>`}
+
+          ${msgs.length > 0 && html`<div style=${{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+            ${msgs.map((m, i) => html`<div key=${i} style=${{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "85%", background: m.role === "user" ? C.purple + "22" : C.panel2, border: `1px solid ${m.role === "user" ? C.purple : C.line}`, borderRadius: 12, padding: "9px 12px", fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", color: C.text }}>
+              ${m.role === "assistant" ? "🔮 " : ""}${m.content}
+            </div>`)}
+            ${busy && html`<div style=${{ alignSelf: "flex-start", fontSize: 13, color: C.faint, padding: "4px 2px" }}>🔮 占っています…</div>`}
+          </div>`}
+
+          ${err && html`<div style=${{ fontSize: 13, color: C.red, marginBottom: 8, lineHeight: 1.6 }}>エラー：${err}${/401|authentication|x-api-key/i.test(err) ? "（APIキーを確認してください）" : ""}</div>`}
+
+          <div style=${{ display: "flex", gap: 8 }}>
+            <input placeholder="相談したいことを入力…" value=${input} onInput=${(e) => setInput(e.target.value)} onKeyDown=${(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} style=${{ ...inp, marginBottom: 0, flex: 1 }} />
+            <button onClick=${() => send()} disabled=${busy || !input.trim()} style=${{ ...inp, marginBottom: 0, width: 92, background: busy || !input.trim() ? C.line : C.purple, color: "#0B0D11", fontWeight: 700, border: "none", cursor: busy || !input.trim() ? "default" : "pointer" }}>送る</button>
+          </div>
+        </div>`;
+      }
+
       function App() {
         // 複数プロフィールを保持。選択中があれば初期値として復元（自動入力＆自動鑑定）。
         const [store, setStore] = useState(loadStore);
@@ -269,8 +411,11 @@
         const [birth, setBirth] = useState(() => buildBirth(initial));
         const [editingId, setEditingId] = useState(() => (initial ? initial.id : null));
         const [err, setErr] = useState("");
+        const [apiKey, setApiKey] = useState(loadKey);
 
         const persist = (next) => { setStore(next); saveStore(next); };
+        const onSaveKey = (k) => { saveKey(k); setApiKey(k); };
+        const onClearKey = () => { clearKey(); setApiKey(""); };
 
         const submit = () => {
           setErr("");
@@ -366,6 +511,9 @@
             ${data.advisor && html`<${Section} title="専属占術師アドバイス" color=${C.accent} sub="あなたの命式から、ビジネス・人間関係・健康・今日の指針を読み解きます。">
               <${Advisor} adv=${data.advisor} />
             <//>`}
+            <${Section} title="AIに相談する（占い師チャット）" color=${C.green} sub="あなたの命式を踏まえて、占い師に直接相談できます。※相談時は命式と相談内容を Claude に送信します。">
+              <${Chat} key=${`${birth.date}|${birth.time}|${birth.place}|${editingId || ""}`} apiKey=${apiKey} onSaveKey=${onSaveKey} onClearKey=${onClearKey} context=${buildOracleContext(data, birth)} name=${birth.name} />
+            <//>
             ${data.detail && html`<${Section} title="算命学・人体星図" color=${C.purple} sub="生年月日から出す“心の設計図”。各星をタップで意味が出ます。">
               <${Jintai} detail=${data.detail} />
             <//>`}
@@ -381,7 +529,7 @@
             ${data.chart && html`<${Section} title="西洋・インド占星術" color=${C.accent}>
               <${AstroSummary} chart=${data.chart} />
             <//>`}
-            <div style=${{ fontSize: 11, color: C.faint, textAlign: "center", marginTop: 10 }}>占いとして参考程度に。計算はすべて端末内で完結します（送信しません）。</div>
+            <div style=${{ fontSize: 11, color: C.faint, textAlign: "center", marginTop: 10, lineHeight: 1.6 }}>占いとして参考程度に。占いの計算・保存はすべて端末内で完結します。AI相談を使う場合のみ、命式と相談内容を Claude に送信します。</div>
           </div>`}
         </div>`;
       }
