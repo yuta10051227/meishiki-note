@@ -125,7 +125,12 @@
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: system }] },
             contents,
-            generationConfig: { maxOutputTokens: 1500, temperature: 0.9 },
+            generationConfig: {
+              maxOutputTokens: 2048,
+              temperature: 0.9,
+              // Gemini 2.5 は思考モデル。思考が出力枠を食って回答が途中で切れるのを防ぐため思考を無効化。
+              thinkingConfig: { thinkingBudget: 0 },
+            },
           }),
         });
         const data = await res.json().catch(() => ({}));
