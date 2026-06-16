@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0F1115" />
+    <title>命式ノート — 算命学・四柱推命・占星術</title>
+    <style>
+      html, body, #root { height: 100%; margin: 0; }
+      body { background: #0F1115; color: #E8EAED; font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; -webkit-text-size-adjust: 100%; }
+      * { box-sizing: border-box; }
+      #root:empty::after { content: "読み込み中…"; display: grid; place-items: center; height: 100%; color: #9AA1AC; font-size: 14px; }
+      input, select, button { font-family: inherit; }
+    </style>
+    <script>
+      // 起動エラーを画面に出す（白画面防止）
+      window.addEventListener("error", function (e) {
+        var r = document.getElementById("root");
+        if (!r || r.childElementCount > 0) return;
+        var msg = (e.error && e.error.stack) || e.message || "読み込みエラー";
+        if (/extension:\/\//.test(String(msg))) return;
+        r.innerHTML = "<div style='padding:20px;font-size:13px;color:#9AA1AC'><b style='color:#E2554B'>読み込みの問題</b><pre style='white-space:pre-wrap;background:#171A21;padding:12px;border-radius:8px'>" + String(msg) + "</pre>（ネット接続が必要です。esm.sh から React と計算ライブラリを読み込みます）</div>";
+      }, true);
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import React, { useState, useMemo } from "https://esm.sh/react@18.3.1";
+      import { createRoot } from "https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1";
+      import htm from "https://esm.sh/htm@3.1.1";
+      import {
+        sanmeiDetail, sanmeiUn, tenchusatsu, daiun, aishou, computeChart,
+      } from "./natal.js";
+
+      const html = htm.bind(React.createElement);
+
+      const C = {
+        bg: "#0F1115", panel: "#171A21", panel2: "#1E222B", line: "#2A2F3A",
+        text: "#E8EAED", sub: "#9AA1AC", faint: "#7A828E",
+        purple: "#9B8CFF", green: "#3FB984", blue: "#5B8DEF", accent: "#C9A227", red: "#E2554B",
+      };
+
+      // 主要都市（出生地・経度緯度のざっくり値）。プロトタイプ用の簡易リスト。
+      const PLACES = [
+        ["東京", 35.68, 139.69], ["札幌", 43.06, 141.35], ["仙台", 38.27, 140.87],
+        ["名古屋", 35.18, 136.91], ["大阪", 34.69, 135.50], ["広島", 34.39, 132.46],
+        ["福岡", 33.59, 130.40], ["那覇", 26.21, 127.68],
+      ];
+
+      const inp = { width: "100%", padding: "11px 12px", marginBottom: 10, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, color: C.text, fontSize: 15 };
+      const card = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16, marginBottom: 14 };
+
+      function Section({ title, color, children, sub }) {
+        return html`<div style=${card}>
+          <div style=${{ fontSize: 15, fontWeight: 700, color: color || C.text, marginBottom: sub ? 2 : 10 }}>${title}</div>
+          ${sub && html`<div style=${{ fontSize: 12, color: C.faint, marginBottom: 10 }}>${sub}</div>`}
+          ${children}
+        </div>`;
+      }
+
+      // ── 人体星図（十字） ──
+      const POS_SHORT = { center: "中央・本質", north: "頭・目上", south: "腹・社会", east: "右手・身近", west: "左手・友人" };
+      function Jintai({ detail }) {
+        const [sel, setSel] = useState("center");
+        const by = {}; (detail.stars || []).forEach((s) => { by[s.pos] = s; });
+        const sd = by[sel];
+        const cell = (pos) => {
+          const s = by[pos]; if (!s) return html`<span></span>`;
+          const on = sel === pos;
+          return html`<button onClick=${() => setSel(pos)} style=${{ border: `1px solid ${on ? C.purple : C.line}`, background: on ? C.purple + "22" : C.panel2, borderRadius: 10, padding: "9px 4px", cursor: "pointer", color: C.text, display: "grid", gap: 1, placeItems: "center" }}>
+            <span style=${{ fontSize: 19 }}>${s.emoji}</span>
+            <span style=${{ fontSize: 14, fontWeight: 700 }}>${s.star}</span>
+            <span style=${{ fontSize: 11, color: C.faint }}>${POS_SHORT[pos]}</span>
+          </button>`;
+        };
+        const eColor = (e) => (e >= 9 ? C.green : e >= 5 ? C.accent : C.blue);
+        return html`<div>
+          <div style=${{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 12 }}>
+            <span></span>${cell("north")}<span></span>
+            ${cell("west")}${cell("center")}${cell("east")}
+            <span></span>${cell("south")}<span></span>
+          </div>
+          ${sd && html`<div style=${{ background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, padding: "11px 13px", marginBottom: 14 }}>
+            <div style=${{ fontSize: 12, color: C.purple, fontWeight: 700 }}>${sd.posLabel}（${sd.source}）</div>
+            <div style=${{ fontSize: 16, fontWeight: 700 }}>${sd.emoji} ${sd.star}・${sd.title}</div>
+            <div style=${{ fontSize: 12, color: C.faint, marginTop: 2 }}>${sd.posMeaning}</div>
+            <div style=${{ fontSize: 13, lineHeight: 1.6, marginTop: 6 }}>${sd.desc}</div>
+            <div style=${{ fontSize: 13, color: C.sub, lineHeight: 1.6, marginTop: 4 }}>💡 ${sd.biz}</div>
+          </div>`}
+          <div style=${{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>人生のエネルギー（十二大従星）</div>
+          ${(detail.energies || []).map((e) => html`<div key=${e.phase} style=${{ marginBottom: 8 }}>
+            <div style=${{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+              <span style=${{ color: C.sub }}>${e.phase}期 ・ <b style=${{ color: C.text }}>${e.name}</b></span>
+              <span style=${{ color: eColor(e.energy), fontWeight: 700 }}>エネルギー ${e.energy}/12</span>
+            </div>
+            <div style=${{ height: 8, background: C.panel2, borderRadius: 5, overflow: "hidden", border: `1px solid ${C.line}` }}>
+              <div style=${{ width: `${(e.energy / 12) * 100}%`, height: "100%", background: eColor(e.energy) }}></div>
+            </div>
+            <div style=${{ fontSize: 11, color: C.faint, marginTop: 2 }}>${e.meaning}</div>
+          </div>`)}
+          ${detail.dayType && html`<div style=${{ fontSize: 13, lineHeight: 1.6, marginTop: 8 }}>
+            <b style=${{ color: C.purple }}>日干タイプ：${detail.dayType.label}</b>　${detail.dayType.desc}
+          </div>`}
+          ${detail.pillars && html`<div style=${{ display: "flex", gap: 8, marginTop: 8 }}>
+            ${[["年柱", detail.pillars.year], ["月柱", detail.pillars.month], ["日柱", detail.pillars.day]].map(([k, v]) =>
+              html`<span key=${k} style=${{ background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 8, padding: "3px 10px", fontSize: 12, color: C.sub }}>${k} <b style=${{ color: C.text }}>${v}</b></span>`)}
+          </div>`}
+        </div>`;
+      }
+
+      // ── 今日／今月／今年の運氣 ──
+      function Flow({ un }) {
+        const stColor = un.day.stance === "攻め" ? C.green : un.day.stance === "守り" ? C.red : un.day.stance === "労い" ? C.blue : C.accent;
+        const Period = (label, u, color) => html`<div key=${label} style=${{ background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, padding: "9px 11px", marginBottom: 8 }}>
+          <div style=${{ fontSize: 13, color, fontWeight: 700 }}>${label}　${u.emoji} ${u.star}（${u.ganzhi}）</div>
+          <div style=${{ fontSize: 13, lineHeight: 1.6 }}>${u.move}</div>
+        </div>`;
+        return html`<div>
+          <div style=${{ background: stColor + "1A", border: `1px solid ${stColor}`, borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+            <div style=${{ fontSize: 14, fontWeight: 700, color: stColor, marginBottom: 2 }}>今日 ・ ${un.day.emoji} ${un.day.star}（${un.day.title}） ・ ${un.day.stance}</div>
+            <div style=${{ fontSize: 13, lineHeight: 1.6 }}>${un.day.move}</div>
+          </div>
+          ${Period("今月", un.month, C.blue)}
+          ${Period("今年", un.year, C.purple)}
+        </div>`;
+      }
+
+      // ── 天中殺・大運 ──
+      function Unsei({ ten, dai }) {
+        return html`<div>
+          ${ten && html`<div style=${{ marginBottom: 12 }}>
+            <div style=${{ fontSize: 14, fontWeight: 700, color: C.blue }}>天中殺：${ten.name}</div>
+            <div style=${{ fontSize: 13, color: C.sub, lineHeight: 1.6, marginTop: 2 }}>${ten.desc}</div>
+            ${Array.isArray(ten.years) && ten.years.length > 0 && html`<div style=${{ fontSize: 12, color: C.faint, marginTop: 2 }}>直近の天中殺の年：${ten.years.join(" / ")}年</div>`}
+          </div>`}
+          ${dai && dai.current && !dai.preStart && html`<div>
+            <div style=${{ fontSize: 14, fontWeight: 700, color: C.purple }}>大運（今この10年）：${dai.current.ganzhi}　${dai.current.star}</div>
+            <div style=${{ fontSize: 12, color: C.faint }}>${dai.current.ageFrom}〜${dai.current.ageTo}歳${dai.assumed ? "（性別未設定のため順行で仮表示）" : ""}</div>
+            <div style=${{ fontSize: 13, lineHeight: 1.6, marginTop: 2 }}>${dai.current.theme}</div>
+            <div style=${{ display: "flex", gap: 6, overflowX: "auto", marginTop: 8, paddingBottom: 4 }}>
+              ${(dai.roadmap || []).map((p, i) => html`<div key=${i} style=${{ flex: "0 0 auto", minWidth: 110, background: p.current ? C.purple + "22" : C.panel2, border: `1px solid ${p.current ? C.purple : C.line}`, borderRadius: 10, padding: "7px 9px" }}>
+                <div style=${{ fontSize: 12, fontWeight: 700, color: p.current ? C.purple : C.text }}>${p.ganzhi} ${p.star}${p.current ? " ← 今" : ""}</div>
+                <div style=${{ fontSize: 11, color: C.faint }}>${p.ageFrom}〜${p.ageTo}歳</div>
+                <div style=${{ fontSize: 11, color: C.sub, lineHeight: 1.5, marginTop: 2 }}>${p.theme}</div>
+              </div>`)}
+            </div>
+          </div>`}
+          ${dai && dai.preStart && html`<div style=${{ fontSize: 13, color: C.sub }}>大運：立運前（${dai.current ? dai.current.startAge : "—"}歳ごろから始まります）</div>`}
+        </div>`;
+      }
+
+      // ── 西洋・インド占星術の要約 ──
+      function AstroSummary({ chart }) {
+        return html`<div style=${{ fontSize: 13, lineHeight: 1.7, color: C.sub }}>
+          <div><b style=${{ color: C.text }}>西洋：</b>${Object.entries(chart.western || {}).map(([k, v]) => `${k} ${v}`).join(" / ")}</div>
+          <div><b style=${{ color: C.text }}>ASC：</b>${chart.asc}</div>
+          <div><b style=${{ color: C.text }}>インド：</b>月のナクシャトラ ${chart.nakshatra}</div>
+          ${chart.dasha && html`<div><b style=${{ color: C.text }}>ダシャー：</b>${chart.dasha.md}期 中の ${chart.dasha.ad}期${chart.dasha.adRange ? `（${chart.dasha.adRange}）` : ""}</div>`}
+        </div>`;
+      }
+
+      // ── 相性（2人目） ──
+      function Aishou({ birth }) {
+        const [b, setB] = useState({ date: "", time: "", gender: "" });
+        const [res, setRes] = useState(null);
+        const [err, setErr] = useState("");
+        const run = () => {
+          setErr("");
+          if (!b.date) { setErr("相手の生年月日を入れてください"); return; }
+          try {
+            const r = aishou(birth, { ...b, time: b.time || "12:00", lat: 35.68, lon: 139.69, utcOffset: 9 });
+            if (!r) { setErr("計算できませんでした"); return; }
+            setRes(r);
+          } catch (e) { setErr(String(e.message || e)); }
+        };
+        const barColor = res ? (res.score >= 75 ? C.green : res.score >= 45 ? C.accent : C.blue) : C.line;
+        return html`<div>
+          <div style=${{ fontSize: 12, color: C.faint, marginBottom: 8 }}>相手の生年月日を入れると、あなたとの相性が出ます。</div>
+          <input type="date" value=${b.date} onInput=${(e) => setB({ ...b, date: e.target.value })} style=${inp} />
+          <div style=${{ display: "flex", gap: 8 }}>
+            <input type="time" value=${b.time} onInput=${(e) => setB({ ...b, time: e.target.value })} style=${{ ...inp, flex: 1 }} />
+            <select value=${b.gender} onChange=${(e) => setB({ ...b, gender: e.target.value })} style=${{ ...inp, flex: 1 }}>
+              <option value="">性別未設定</option><option value="male">男性</option><option value="female">女性</option>
+            </select>
+          </div>
+          <button onClick=${run} style=${{ ...inp, background: C.purple, color: "#0B0D11", fontWeight: 700, border: "none", cursor: "pointer" }}>相性を見る</button>
+          ${err && html`<div style=${{ fontSize: 13, color: C.red }}>${err}</div>`}
+          ${res && html`<div style=${{ marginTop: 6 }}>
+            <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+              <span style=${{ fontSize: 15, fontWeight: 700 }}>${res.label}</span>
+              <span style=${{ fontSize: 18, fontWeight: 800, color: barColor }}>${res.score}点</span>
+            </div>
+            <div style=${{ height: 8, background: C.panel2, borderRadius: 5, overflow: "hidden", border: `1px solid ${C.line}`, marginBottom: 8 }}>
+              <div style=${{ width: `${res.score}%`, height: "100%", background: barColor }}></div>
+            </div>
+            <div style=${{ fontSize: 13, color: C.sub, lineHeight: 1.7 }}>${String(res.summary || "").replace(/\s*根拠[:：].*$/s, "")}</div>
+            ${Array.isArray(res.reasons) && res.reasons.length > 0 && html`<div style=${{ display: "flex", flexWrap: "wrap", gap: 6, margin: "8px 0" }}>
+              ${res.reasons.map((r, i) => html`<span key=${i} style=${{ fontSize: 12, color: C.faint, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 999, padding: "2px 9px" }}>${r}</span>`)}
+            </div>`}
+            ${res.aToB && html`<div style=${{ fontSize: 13, marginTop: 6 }}><b style=${{ color: C.purple }}>あなた→相手：</b>${res.aToB}</div>`}
+            ${res.bToA && html`<div style=${{ fontSize: 13, marginTop: 2 }}><b style=${{ color: C.blue }}>相手→あなた：</b>${res.bToA}</div>`}
+            ${Array.isArray(res.howto) && res.howto.length > 0 && html`<div style=${{ marginTop: 6 }}>
+              <div style=${{ fontSize: 12, fontWeight: 700, color: C.accent }}>うまくいくコツ</div>
+              ${res.howto.map((h, i) => html`<div key=${i} style=${{ fontSize: 13, color: C.sub, lineHeight: 1.7 }}>・${h}</div>`)}
+            </div>`}
+          </div>`}
+        </div>`;
+      }
+
+      function App() {
+        const [form, setForm] = useState({ name: "", date: "", time: "", gender: "", place: "東京" });
+        const [birth, setBirth] = useState(null);
+        const [err, setErr] = useState("");
+        const submit = () => {
+          setErr("");
+          if (!form.date) { setErr("生年月日を入れてください"); return; }
+          const p = PLACES.find((x) => x[0] === form.place) || PLACES[0];
+          setBirth({ name: form.name.trim(), date: form.date, time: form.time || "12:00", gender: form.gender, place: form.place, lat: p[1], lon: p[2], utcOffset: 9 });
+        };
+        const data = useMemo(() => {
+          if (!birth) return null;
+          try {
+            return {
+              detail: sanmeiDetail(birth),
+              un: sanmeiUn(birth, new Date().toISOString().slice(0, 10)),
+              ten: tenchusatsu(birth),
+              dai: daiun(birth),
+              chart: computeChart(birth),
+            };
+          } catch (e) { return { error: String(e.message || e) }; }
+        }, [birth && birth.date, birth && birth.time, birth && birth.gender, birth && birth.place]);
+
+        return html`<div style=${{ maxWidth: 600, margin: "0 auto", padding: "20px 16px 60px" }}>
+          <div style=${{ textAlign: "center", marginBottom: 4 }}>
+            <div style=${{ fontSize: 22, fontWeight: 800, letterSpacing: 1 }}>命式ノート</div>
+            <div style=${{ fontSize: 12, color: C.faint }}>算命学・四柱推命・西洋＆インド占星術 — 生年月日からの自前計算</div>
+          </div>
+
+          <div style=${card}>
+            <input placeholder="名前（任意）" value=${form.name} onInput=${(e) => setForm({ ...form, name: e.target.value })} style=${inp} />
+            <label style=${{ fontSize: 12, color: C.sub, display: "block", marginBottom: 2 }}>生年月日</label>
+            <input type="date" value=${form.date} onInput=${(e) => setForm({ ...form, date: e.target.value })} style=${inp} />
+            <label style=${{ fontSize: 12, color: C.sub, display: "block", marginBottom: 2 }}>出生時刻（不明なら空でOK＝12:00扱い）</label>
+            <input type="time" value=${form.time} onInput=${(e) => setForm({ ...form, time: e.target.value })} style=${inp} />
+            <div style=${{ display: "flex", gap: 8 }}>
+              <div style=${{ flex: 1 }}>
+                <label style=${{ fontSize: 12, color: C.sub, display: "block", marginBottom: 2 }}>性別（大運の算出に使用）</label>
+                <select value=${form.gender} onChange=${(e) => setForm({ ...form, gender: e.target.value })} style=${inp}>
+                  <option value="">未設定</option><option value="male">男性</option><option value="female">女性</option>
+                </select>
+              </div>
+              <div style=${{ flex: 1 }}>
+                <label style=${{ fontSize: 12, color: C.sub, display: "block", marginBottom: 2 }}>出生地（近い都市）</label>
+                <select value=${form.place} onChange=${(e) => setForm({ ...form, place: e.target.value })} style=${inp}>
+                  ${PLACES.map((p) => html`<option key=${p[0]}>${p[0]}</option>`)}
+                </select>
+              </div>
+            </div>
+            <button onClick=${submit} style=${{ ...inp, marginBottom: 0, background: C.accent, color: "#0B0D11", fontWeight: 700, border: "none", cursor: "pointer", fontSize: 16 }}>鑑定する</button>
+            ${err && html`<div style=${{ fontSize: 13, color: C.red, marginTop: 8 }}>${err}</div>`}
+          </div>
+
+          ${data && data.error && html`<div style=${{ ...card, color: C.red }}>計算エラー：${data.error}</div>`}
+          ${data && !data.error && html`<div>
+            ${birth.name && html`<div style=${{ fontSize: 13, color: C.sub, marginBottom: 10 }}>${birth.name} さんの命式</div>`}
+            ${data.detail && html`<${Section} title="算命学・人体星図" color=${C.purple} sub="生年月日から出す“心の設計図”。各星をタップで意味が出ます。">
+              <${Jintai} detail=${data.detail} />
+            <//>`}
+            ${data.un && html`<${Section} title="今日・今月・今年の運氣" color=${C.purple} sub="あなたの日干に、今動いている星（十大主星）を重ねた流れ・動き方。">
+              <${Flow} un=${data.un} />
+            <//>`}
+            ${(data.ten || data.dai) && html`<${Section} title="天中殺・大運（人生の流れ）" color=${C.blue}>
+              <${Unsei} ten=${data.ten} dai=${data.dai} />
+            <//>`}
+            <${Section} title="相性を見る（2人）" color=${C.green}>
+              <${Aishou} birth=${birth} />
+            <//>
+            ${data.chart && html`<${Section} title="西洋・インド占星術" color=${C.accent}>
+              <${AstroSummary} chart=${data.chart} />
+            <//>`}
+            <div style=${{ fontSize: 11, color: C.faint, textAlign: "center", marginTop: 10 }}>占いとして参考程度に。計算はすべて端末内で完結します（送信しません）。</div>
+          </div>`}
+        </div>`;
+      }
+
+      createRoot(document.getElementById("root")).render(html`<${App} />`);
+    </script>
+  </body>
+</html>
