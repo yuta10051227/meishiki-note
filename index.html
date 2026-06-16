@@ -64,7 +64,7 @@
       // 入力（生年月日など）は端末内の localStorage にのみ保存。外部送信はしない。
       // v2: 複数プロフィールをリストで保持し、名前で切り替えられる。
       const STORE_KEY = "meishiki-note:v2";
-      const DEFAULT_FORM = { name: "", date: "", time: "", gender: "", place: "東京" };
+      const DEFAULT_FORM = { name: "", date: "", time: "", gender: "", place: "東京", memo: "" };
       const newId = () => "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
       const labelOf = (p) => (p && (p.name || p.date)) || "無題";
       const loadStore = () => {
@@ -78,7 +78,7 @@
       const buildBirth = (f) => {
         if (!f || !f.date) return null;
         const p = PLACES.find((x) => x[0] === f.place) || PLACES[0];
-        return { name: (f.name || "").trim(), date: f.date, time: f.time || "12:00", timeKnown: !!f.time, gender: f.gender || "", place: f.place || PLACES[0][0], lat: p[1], lon: p[2], utcOffset: 9 };
+        return { name: (f.name || "").trim(), date: f.date, time: f.time || "12:00", timeKnown: !!f.time, gender: f.gender || "", place: f.place || PLACES[0][0], lat: p[1], lon: p[2], utcOffset: 9, memo: (f.memo || "").trim() };
       };
 
       // ── AI占い師チャット（自分専用・ブラウザから Google Gemini を直接呼ぶ）──
@@ -87,6 +87,28 @@
       const loadKey = () => { try { return localStorage.getItem(KEY_STORE) || ""; } catch { return ""; } };
       const saveKey = (k) => { try { localStorage.setItem(KEY_STORE, k); } catch {} };
       const clearKey = () => { try { localStorage.removeItem(KEY_STORE); } catch {} };
+
+      // ── カスタマイズ設定（端末内に保存）──
+      const SETTINGS_STORE = "meishiki-note:settings:v1";
+      const DEFAULT_SECTIONS = { advisor: true, chat: true, jintai: true, un: true, unsei: true, aishou: true, astro: true };
+      const DEFAULT_SETTINGS = { tone: "gentle", oracleName: "", replyLength: "normal", sections: { ...DEFAULT_SECTIONS } };
+      const loadSettings = () => {
+        try {
+          const s = JSON.parse(localStorage.getItem(SETTINGS_STORE) || "null") || {};
+          return { ...DEFAULT_SETTINGS, ...s, sections: { ...DEFAULT_SECTIONS, ...(s.sections || {}) } };
+        } catch { return { ...DEFAULT_SETTINGS, sections: { ...DEFAULT_SECTIONS } }; }
+      };
+      const saveSettings = (s) => { try { localStorage.setItem(SETTINGS_STORE, JSON.stringify(s)); } catch {} };
+      // 占い師の口調・回答の長さプリセット（システムプロンプトに反映）
+      const TONE_PROMPTS = {
+        gentle: "やさしく寄り添う、穏やかで丁寧な口調で話す。",
+        friendly: "親しみやすいフレンドリーなタメ口で、距離感近めに話す。",
+        blunt: "歯に衣着せずズバッと辛口で指摘する。ただし最後は必ず前向きに背中を押す。",
+        polite: "上品で格調高い、敬語の丁寧な口調で話す。",
+      };
+      const TONE_LABELS = { gentle: "やさしい", friendly: "フレンドリー(タメ口)", blunt: "辛口ズバッと", polite: "丁寧・上品" };
+      const LENGTH_PROMPTS = { short: "回答は短く要点だけ（2〜3文）。", normal: "回答は適度な長さで。", long: "回答は具体例を交えてやや詳しめに。" };
+      const LENGTH_LABELS = { short: "短め", normal: "標準", long: "詳しめ" };
 
       // 命式・算命学の読みを「鑑定の根拠」テキストにまとめる（システムプロンプトに渡す）
       function buildOracleContext(data, birth) {
@@ -107,6 +129,7 @@
           if (a.health) lines.push(`【健康】${fmt(a.health)}`);
           if (a.today) lines.push(`【今日】${fmt(a.today)}`);
         }
+        if (birth && birth.memo) lines.push(`相談者からの補足メモ（重視して反映）: ${birth.memo}`);
         return lines.join("\n");
       }
 
@@ -338,7 +361,7 @@
         "最近の体調管理のヒントが欲しい",
         "今日〜今週の過ごし方のアドバイスを",
       ];
-      function Chat({ apiKey, onSaveKey, onClearKey, context, name }) {
+      function Chat({ apiKey, onSaveKey, onClearKey, context, name, tone, replyLength, oracleName }) {
         const [msgs, setMsgs] = useState([]);
         const [input, setInput] = useState("");
         const [busy, setBusy] = useState(false);
@@ -351,11 +374,13 @@
 # 相談者の命式（鑑定の根拠。必ずこれに基づいて答えること）
 ${context}
 
+# 話し方
+${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LENGTH_PROMPTS.normal}${oracleName ? ` あなたの名前は「${oracleName}」。一人称や名乗りに使ってよい。` : ""}
+
 # 回答のルール
 - 上の命式・星の配置を根拠に、具体的で実用的なアドバイスを返す。占い用語は噛み砕いて説明する。
-- 断定しすぎず、相談者の背中をやさしく押す前向きなトーンで。
 - 健康の話題は「算命学の五行に基づく養生の目安」であり医療的診断ではない旨を必ず添え、深刻・継続する不調は医療機関の受診を勧める。
-- 日本語で、読みやすく簡潔に（必要十分な長さで）。`;
+- 日本語で、読みやすく。`;
 
         const send = async (text) => {
           const q = (text != null ? text : input).trim();
@@ -387,7 +412,7 @@ ${context}
 
         return html`<div>
           <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <div style=${{ fontSize: 12, color: C.faint }}>🔮 ${name ? name + " さん専属の占い師" : "あなた専属の占い師"}（Gemini）</div>
+            <div style=${{ fontSize: 12, color: C.faint }}>🔮 ${oracleName ? oracleName : (name ? name + " さん専属の占い師" : "あなた専属の占い師")}（Gemini）</div>
             <button onClick=${() => setShowKey(!showKey)} style=${{ background: "none", border: "none", color: C.faint, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>キー設定</button>
           </div>
           ${showKey && html`<div style=${{ background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 12, color: C.sub }}>
@@ -417,6 +442,41 @@ ${context}
         </div>`;
       }
 
+      // ── 設定・カスタマイズ パネル ──
+      function Settings({ settings, onChange }) {
+        const [open, setOpen] = useState(false);
+        const set = (patch) => onChange({ ...settings, ...patch });
+        const setSection = (k, v) => onChange({ ...settings, sections: { ...settings.sections, [k]: v } });
+        const lbl = { fontSize: 12, color: C.sub, display: "block", margin: "0 0 2px" };
+        const SEC = [["advisor", "専属占術師アドバイス"], ["chat", "AI相談"], ["jintai", "人体星図"], ["un", "今日・今月・今年の運氣"], ["unsei", "天中殺・大運"], ["aishou", "相性"], ["astro", "西洋・インド占星術"]];
+        return html`<div style=${card}>
+          <div onClick=${() => setOpen(!open)} style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
+            <span style=${{ fontSize: 14, fontWeight: 700, color: C.text }}>⚙️ 設定・カスタマイズ</span>
+            <span style=${{ fontSize: 12, color: C.sub }}>${open ? "閉じる ▲" : "開く ▼"}</span>
+          </div>
+          ${open && html`<div style=${{ marginTop: 12 }}>
+            <label style=${lbl}>占い師の口調</label>
+            <select value=${settings.tone} onChange=${(e) => set({ tone: e.target.value })} style=${inp}>
+              ${Object.entries(TONE_LABELS).map(([k, v]) => html`<option key=${k} value=${k}>${v}</option>`)}
+            </select>
+            <label style=${lbl}>占い師の名前（任意）</label>
+            <input value=${settings.oracleName} onInput=${(e) => set({ oracleName: e.target.value })} placeholder="例：紫苑先生" style=${inp} />
+            <label style=${lbl}>AIの回答の長さ</label>
+            <select value=${settings.replyLength} onChange=${(e) => set({ replyLength: e.target.value })} style=${inp}>
+              ${Object.entries(LENGTH_LABELS).map(([k, v]) => html`<option key=${k} value=${k}>${v}</option>`)}
+            </select>
+            <div style=${{ fontSize: 12, color: C.sub, margin: "4px 0 6px" }}>表示するセクション（タップでON/OFF）</div>
+            <div style=${{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              ${SEC.map(([k, label]) => {
+                const on = settings.sections[k] !== false;
+                return html`<button key=${k} onClick=${() => setSection(k, !on)} style=${{ border: `1px solid ${on ? C.green : C.line}`, background: on ? C.green + "22" : C.panel2, color: on ? C.green : C.faint, borderRadius: 999, padding: "5px 11px", fontSize: 12, cursor: "pointer" }}>${on ? "✓ " : ""}${label}</button>`;
+              })}
+            </div>
+            <div style=${{ fontSize: 11, color: C.faint, marginTop: 10, lineHeight: 1.6 }}>設定はこの端末に保存されます。占い師の名前・口調・回答の長さは AI相談に反映されます。</div>
+          </div>`}
+        </div>`;
+      }
+
       function App() {
         // 複数プロフィールを保持。選択中があれば初期値として復元（自動入力＆自動鑑定）。
         const [store, setStore] = useState(loadStore);
@@ -427,16 +487,19 @@ ${context}
         const [err, setErr] = useState("");
         const [apiKey, setApiKey] = useState(loadKey);
         const [collapsed, setCollapsed] = useState(() => !!initial); // 保存復元時は入力を畳んで結果を見せる
+        const [settings, setSettings] = useState(loadSettings);
 
         const persist = (next) => { setStore(next); saveStore(next); };
         const onSaveKey = (k) => { saveKey(k); setApiKey(k); };
         const onClearKey = () => { clearKey(); setApiKey(""); };
+        const onChangeSettings = (s) => { setSettings(s); saveSettings(s); };
+        const sec = settings.sections;
 
         const submit = () => {
           setErr("");
           if (!form.date) { setErr("生年月日を入れてください"); return; }
           const id = editingId || newId();
-          const entry = { id, name: form.name || "", date: form.date, time: form.time || "", gender: form.gender || "", place: form.place || DEFAULT_FORM.place };
+          const entry = { id, name: form.name || "", date: form.date, time: form.time || "", gender: form.gender || "", place: form.place || DEFAULT_FORM.place, memo: form.memo || "" };
           const exists = store.profiles.some((p) => p.id === id);
           const profiles = exists ? store.profiles.map((p) => (p.id === id ? entry : p)) : [...store.profiles, entry];
           persist({ profiles, currentId: id });
@@ -518,6 +581,8 @@ ${context}
                 </select>
               </div>
             </div>
+            <label style=${{ fontSize: 12, color: C.sub, display: "block", marginBottom: 2 }}>私について（AIに伝える追加メモ・任意）</label>
+            <textarea value=${form.memo} onInput=${(e) => setForm({ ...form, memo: e.target.value })} placeholder="例：30代・経営者。最近の悩みは事業の方向性と健康。慎重な性格。" rows=${2} style=${{ ...inp, resize: "vertical", lineHeight: 1.5 }}></textarea>
             <button onClick=${submit} style=${{ ...inp, marginBottom: 0, width: "100%", background: C.accent, color: "#0B0D11", fontWeight: 700, border: "none", cursor: "pointer", fontSize: 16 }}>${editingId ? "更新して鑑定" : "鑑定して保存"}</button>
             <div style=${{ fontSize: 11, color: C.faint, marginTop: 6 }}>
               ${store.profiles.length > 0
@@ -528,31 +593,33 @@ ${context}
             </div>`}
           </div>
 
+          <${Settings} settings=${settings} onChange=${onChangeSettings} />
+
           ${data && data.error && html`<div style=${{ ...card, color: C.red }}>計算エラー：${data.error}</div>`}
           ${data && !data.error && html`<div>
             ${birth.name && html`<div style=${{ fontSize: 13, color: C.sub, marginBottom: 10 }}>${birth.name} さんの命式</div>`}
             ${!birth.timeKnown && html`<div style=${{ fontSize: 12, color: C.accent, background: C.accent + "14", border: `1px solid ${C.accent}55`, borderRadius: 8, padding: "7px 10px", marginBottom: 10, lineHeight: 1.6 }}>
               出生時刻が未入力のため <b>12:00</b> として計算しています。時柱・ASC（上昇宮）は概算です。
             </div>`}
-            ${data.advisor && html`<${Section} title="専属占術師アドバイス" color=${C.accent} sub="あなたの命式から、ビジネス・人間関係・健康・今日の指針を読み解きます。">
+            ${sec.advisor && data.advisor && html`<${Section} title="専属占術師アドバイス" color=${C.accent} sub="あなたの命式から、ビジネス・人間関係・健康・今日の指針を読み解きます。">
               <${Advisor} adv=${data.advisor} />
             <//>`}
-            <${Section} title="AIに相談する（占い師チャット）" color=${C.green} sub="あなたの命式を踏まえて、占い師に直接相談できます。※相談時は命式と相談内容を Claude に送信します。">
-              <${Chat} key=${`${birth.date}|${birth.time}|${birth.place}|${editingId || ""}`} apiKey=${apiKey} onSaveKey=${onSaveKey} onClearKey=${onClearKey} context=${buildOracleContext(data, birth)} name=${birth.name} />
-            <//>
-            ${data.detail && html`<${Section} title="算命学・人体星図" color=${C.purple} sub="生年月日から出す“心の設計図”。各星をタップで意味が出ます。">
+            ${sec.chat && html`<${Section} title="AIに相談する（占い師チャット）" color=${C.green} sub="あなたの命式を踏まえて、占い師に直接相談できます。※相談時は命式と相談内容を Gemini に送信します。">
+              <${Chat} key=${`${birth.date}|${birth.time}|${birth.place}|${editingId || ""}`} apiKey=${apiKey} onSaveKey=${onSaveKey} onClearKey=${onClearKey} context=${buildOracleContext(data, birth)} name=${birth.name} tone=${settings.tone} replyLength=${settings.replyLength} oracleName=${settings.oracleName} />
+            <//>`}
+            ${sec.jintai && data.detail && html`<${Section} title="算命学・人体星図" color=${C.purple} sub="生年月日から出す“心の設計図”。各星をタップで意味が出ます。">
               <${Jintai} detail=${data.detail} />
             <//>`}
-            ${data.un && html`<${Section} title="今日・今月・今年の運氣" color=${C.purple} sub="あなたの日干に、今動いている星（十大主星）を重ねた流れ・動き方。">
+            ${sec.un && data.un && html`<${Section} title="今日・今月・今年の運氣" color=${C.purple} sub="あなたの日干に、今動いている星（十大主星）を重ねた流れ・動き方。">
               <${Flow} un=${data.un} />
             <//>`}
-            ${(data.ten || data.dai) && html`<${Section} title="天中殺・大運（人生の流れ）" color=${C.blue}>
+            ${sec.unsei && (data.ten || data.dai) && html`<${Section} title="天中殺・大運（人生の流れ）" color=${C.blue}>
               <${Unsei} ten=${data.ten} dai=${data.dai} />
             <//>`}
-            <${Section} title="相性を見る（2人）" color=${C.green}>
+            ${sec.aishou && html`<${Section} title="相性を見る（2人）" color=${C.green}>
               <${Aishou} birth=${birth} />
-            <//>
-            ${data.chart && html`<${Section} title="西洋・インド占星術" color=${C.accent}>
+            <//>`}
+            ${sec.astro && data.chart && html`<${Section} title="西洋・インド占星術" color=${C.accent}>
               <${AstroSummary} chart=${data.chart} />
             <//>`}
             <div style=${{ fontSize: 11, color: C.faint, textAlign: "center", marginTop: 10, lineHeight: 1.6 }}>占いとして参考程度に。占いの計算・保存はすべて端末内で完結します。AI相談を使う場合のみ、命式と相談内容を Gemini（Google）に送信します。</div>
