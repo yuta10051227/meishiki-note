@@ -47,9 +47,35 @@ export function computeChart(birth) {
   const eps = 23.4393 * Math.PI / 180, ramc = ramcDeg * Math.PI / 180, phi = lat * Math.PI / 180;
   const asc = norm(Math.atan2(Math.cos(ramc), -(Math.sin(ramc) * Math.cos(eps) + Math.tan(phi) * Math.sin(eps))) * 180 / Math.PI);
 
+  // ── 真太陽時（地方時補正）──
+  // 標準時のままでは出生地の東西で太陽の位置が最大±数十分ずれる。
+  // 経度差と均時差を補正した「その土地の見かけの太陽時」を出し、日柱・時柱の判定に使う。
+  let aY = Y, aM = M, aD = D, aH = hh;
+  try {
+    const observer = new A.Observer(lat, lon, 0);
+    const sunRa = A.Equator(A.Body.Sun, t, observer, true, true).ra;   // 太陽の視赤経(時)
+    const lha = (((gst + lon / 15 - sunRa) % 24) + 24) % 24;           // 太陽の地方時角(時)
+    const lastHours = (lha + 12) % 24;                                 // 地方真太陽時(時)
+    const utcDec = utc.getUTCHours() + utc.getUTCMinutes() / 60 + utc.getUTCSeconds() / 3600;
+    const lmstHours = (((utcDec + lon / 15) % 24) + 24) % 24;          // 地方平均太陽時(時)
+    let eot = lastHours - lmstHours;                                   // 均時差(時)
+    if (eot > 12) eot -= 24; else if (eot < -12) eot += 24;
+    const apparent = new Date(utc.getTime() + (lon / 15 + eot) * 3600000);
+    aY = apparent.getUTCFullYear(); aM = apparent.getUTCMonth() + 1;
+    aD = apparent.getUTCDate(); aH = apparent.getUTCHours();
+  } catch { /* astronomy-engine 未対応時は標準時のまま */ }
+
   // ── 四柱推命 ──
-  // 年柱（立春[約2/4]で切替）
-  const solarYear = (M < 2 || (M === 2 && D < 4)) ? Y - 1 : Y;
+  // 年柱（立春で切替。1〜2月生まれは実際の立春時刻と比較して前年扱いか判定）
+  let solarYear = Y;
+  if (M <= 2) {
+    let beforeRisshun = (M === 1) || (M === 2 && D < 4); // フォールバック（固定2/4）
+    try {
+      const risshun = A.SearchSunLongitude(315, A.MakeTime(new Date(Date.UTC(Y, 0, 15))), 40);
+      if (risshun) beforeRisshun = utc.getTime() < risshun.date.getTime();
+    } catch { /* 未対応時は固定日フォールバック */ }
+    if (beforeRisshun) solarYear = Y - 1;
+  }
   const yIdx = ((solarYear - 1984) % 60 + 60) % 60;
   const yearPillar = G[yIdx % 10] + Z[yIdx % 12];
   // 月柱（太陽黄経で節月を判定。立春=黄経315°=寅月）
@@ -59,12 +85,12 @@ export function computeChart(birth) {
   const tigerStem = (yearStem % 5 * 2 + 2) % 10; // 五虎遁: 寅月の天干
   const monthStem = (tigerStem + bucket) % 10;
   const monthPillar = G[monthStem] + Z[monthBranch];
-  // 日柱
-  const dIdx = ((jdn(Y, M, D) - DAY_ANCHOR) % 60 + 60) % 60;
+  // 日柱（真太陽時の暦日で算出。深夜生まれは地方時で前後の日にずれ得る）
+  const dIdx = ((jdn(aY, aM, aD) - DAY_ANCHOR) % 60 + 60) % 60;
   const dayStem = dIdx % 10;
   const dayPillar = G[dayStem] + Z[dIdx % 12];
-  // 時柱（五鼠遁）
-  const hourBranch = Math.floor(((hh + 1) % 24) / 2);
+  // 時柱（五鼠遁。真太陽時の時刻で支を決める）
+  const hourBranch = Math.floor(((aH + 1) % 24) / 2);
   const hourStem = (dayStem % 5 * 2 + hourBranch) % 10;
   const hourPillar = G[hourStem] + Z[hourBranch];
 
@@ -487,8 +513,8 @@ export function daiun(birth) {
   else if (gender === "female") forward = !yangYear; // 陰女=順 / 陽女=逆
   else { forward = true; assumed = true; }           // 未設定は順行仮定
 
-  // 立運（開始年齢）の近似: 出生時の太陽黄経から次の節（30°境界, 起点315°）までの度数。
-  // 順行なら次の節まで、逆行なら前の節までの度数を使う（簡易）。1°≒1日, 3日=1歳。
+  // 立運（開始年齢）: 出生から次／前の節入りまでの「実日数」を 3日=1歳 で換算。
+  // 順行なら次の節入りまで、逆行なら前の節入りまでの日数を、astronomy-engine で実時刻探索。
   let startAge = 0;
   try {
     const [Y, M, D] = String(birth.date).split("-").map(Number);
@@ -496,10 +522,23 @@ export function daiun(birth) {
     const utcOffset = birth.utcOffset ?? 9;
     const utc = new Date(Date.UTC(Y, M - 1, D, hh - utcOffset, mm));
     const sunLon = norm(A.SunPosition(A.MakeTime(utc)).elon);
-    const fromSetsu = norm(sunLon - 315); // 立春315°起点での節内位置 0..360
-    const within = fromSetsu % 30;        // 直近の節からの経過度数
-    const deg = forward ? (30 - within) : within; // 次/前の節までの度数
-    startAge = Math.max(0, Math.round((deg / 3) * 10) / 10); // 度=日, /3=年
+    const k = Math.floor(norm(sunLon - 315) / 30);      // 直近の節（0=寅..）
+    const nextLon = norm(315 + (k + 1) * 30);           // 次の節入りの黄経
+    const prevLon = norm(315 + k * 30);                 // 直前の節入りの黄経
+    let days;
+    try {
+      if (forward) {
+        const nx = A.SearchSunLongitude(nextLon, A.MakeTime(utc), 40);
+        days = (nx.date.getTime() - utc.getTime()) / 86400000;
+      } else {
+        const pv = A.SearchSunLongitude(prevLon, A.MakeTime(new Date(utc.getTime() - 40 * 86400000)), 40);
+        days = (utc.getTime() - pv.date.getTime()) / 86400000;
+      }
+    } catch {
+      const within = norm(sunLon - 315) % 30;           // フォールバック: 1°≒1日
+      days = forward ? (30 - within) : within;
+    }
+    startAge = Math.max(0, Math.round((days / 3) * 10) / 10); // 3日=1歳
   } catch { startAge = 0; }
 
   // 現在年齢

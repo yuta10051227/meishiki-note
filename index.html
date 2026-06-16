@@ -41,11 +41,24 @@
         purple: "#9B8CFF", green: "#3FB984", blue: "#5B8DEF", accent: "#C9A227", red: "#E2554B",
       };
 
-      // 主要都市（出生地・経度緯度のざっくり値）。プロトタイプ用の簡易リスト。
+      // 出生地（47都道府県の県庁所在地・緯度経度）。真太陽時の地方時補正に使用。
       const PLACES = [
-        ["東京", 35.68, 139.69], ["札幌", 43.06, 141.35], ["仙台", 38.27, 140.87],
-        ["名古屋", 35.18, 136.91], ["大阪", 34.69, 135.50], ["広島", 34.39, 132.46],
-        ["福岡", 33.59, 130.40], ["那覇", 26.21, 127.68],
+        ["北海道", 43.06, 141.35], ["青森", 40.82, 140.74], ["岩手", 39.70, 141.15],
+        ["宮城", 38.27, 140.87], ["秋田", 39.72, 140.10], ["山形", 38.24, 140.36],
+        ["福島", 37.75, 140.47], ["茨城", 36.34, 140.45], ["栃木", 36.57, 139.88],
+        ["群馬", 36.39, 139.06], ["埼玉", 35.86, 139.65], ["千葉", 35.61, 140.12],
+        ["東京", 35.69, 139.69], ["神奈川", 35.45, 139.64], ["新潟", 37.90, 139.02],
+        ["富山", 36.70, 137.21], ["石川", 36.59, 136.63], ["福井", 36.07, 136.22],
+        ["山梨", 35.66, 138.57], ["長野", 36.65, 138.18], ["岐阜", 35.39, 136.72],
+        ["静岡", 34.98, 138.38], ["愛知", 35.18, 136.91], ["三重", 34.73, 136.51],
+        ["滋賀", 35.00, 135.87], ["京都", 35.02, 135.76], ["大阪", 34.69, 135.50],
+        ["兵庫", 34.69, 135.20], ["奈良", 34.69, 135.83], ["和歌山", 34.23, 135.17],
+        ["鳥取", 35.50, 134.24], ["島根", 35.47, 133.05], ["岡山", 34.66, 133.93],
+        ["広島", 34.40, 132.46], ["山口", 34.19, 131.47], ["徳島", 34.07, 134.56],
+        ["香川", 34.34, 134.05], ["愛媛", 33.84, 132.77], ["高知", 33.56, 133.53],
+        ["福岡", 33.61, 130.42], ["佐賀", 33.25, 130.30], ["長崎", 32.74, 129.87],
+        ["熊本", 32.79, 130.74], ["大分", 33.24, 131.61], ["宮崎", 31.91, 131.42],
+        ["鹿児島", 31.56, 130.56], ["沖縄", 26.21, 127.68],
       ];
 
       const inp = { width: "100%", padding: "11px 12px", marginBottom: 10, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, color: C.text, fontSize: 15 };
@@ -216,7 +229,7 @@
           setErr("");
           if (!form.date) { setErr("生年月日を入れてください"); return; }
           const p = PLACES.find((x) => x[0] === form.place) || PLACES[0];
-          setBirth({ name: form.name.trim(), date: form.date, time: form.time || "12:00", gender: form.gender, place: form.place, lat: p[1], lon: p[2], utcOffset: 9 });
+          setBirth({ name: form.name.trim(), date: form.date, time: form.time || "12:00", timeKnown: !!form.time, gender: form.gender, place: form.place, lat: p[1], lon: p[2], utcOffset: 9 });
         };
         const data = useMemo(() => {
           if (!birth) return null;
@@ -264,6 +277,9 @@
           ${data && data.error && html`<div style=${{ ...card, color: C.red }}>計算エラー：${data.error}</div>`}
           ${data && !data.error && html`<div>
             ${birth.name && html`<div style=${{ fontSize: 13, color: C.sub, marginBottom: 10 }}>${birth.name} さんの命式</div>`}
+            ${!birth.timeKnown && html`<div style=${{ fontSize: 12, color: C.accent, background: C.accent + "14", border: `1px solid ${C.accent}55`, borderRadius: 8, padding: "7px 10px", marginBottom: 10, lineHeight: 1.6 }}>
+              出生時刻が未入力のため <b>12:00</b> として計算しています。時柱・ASC（上昇宮）は概算です。
+            </div>`}
             ${data.detail && html`<${Section} title="算命学・人体星図" color=${C.purple} sub="生年月日から出す“心の設計図”。各星をタップで意味が出ます。">
               <${Jintai} detail=${data.detail} />
             <//>`}
