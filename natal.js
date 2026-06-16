@@ -882,3 +882,104 @@ export function sanmeiUn(birth, dateISO) {
     };
   } catch { return null; }
 }
+
+/* ════════════════════════════════════════════════════════════════
+   専属占術師アドバイス（決定論・AI不使用）
+   命式（日干・中心星・人体星図・大運・天中殺・今日の運氣）と五行バランスから、
+   ビジネス／人間関係／健康／今日の指針を分野別に読み解く。
+   ※ 将来 AI チャットを足す場合も、ここで作る構造化データ＋computeChart().text を
+      根拠（プロンプト材料）として渡せる設計。
+   ════════════════════════════════════════════════════════════════ */
+
+// 五行ごとの「動き方」（不足を補う行動のヒント）
+const ELEM_ACTION = {
+  木: "企画・新規開拓・成長戦略", 火: "発信・表現・人前に出る", 土: "仕組み化・信頼構築・蓄積",
+  金: "決断・改善・仕上げと品質", 水: "情報収集・知恵・柔軟な戦略",
+};
+// 日干の五行ごとの恋愛・人間関係スタイル
+const LOVE_BY_ELEM = {
+  木: "まっすぐで面倒見がよく、相手を育てたいタイプ。素直さが信頼を生む。",
+  火: "情熱的で表現豊か。一緒に楽しめる相手と輝く。熱しやすさは小休止で調整。",
+  土: "誠実で安定志向。じっくり信頼を積む。受け止める包容力が魅力。",
+  金: "一途で美意識が高い。質を重んじる。こだわりは言葉で伝えると円滑。",
+  水: "柔軟で受容的、聞き上手。流れに合わせる賢さがある。境界線も大切に。",
+};
+// 五行→体・健康の養生（医療ではなく自己管理の目安）
+const ELEM_HEALTH = {
+  木: { organ: "肝・胆・筋・目", excess: "イライラ・張り・目の疲れが出やすい。緊張を緩めて。", lack: "決断力や回復力が落ちやすい。睡眠と適度な運動で巡りを。", care: "ストレッチ・深呼吸・酸味と緑黄色野菜。" },
+  火: { organ: "心・血流・睡眠", excess: "高ぶり・不眠・のぼせに注意。クールダウンを。", lack: "冷え・気力低下が出やすい。笑いと適度な熱を。", care: "規則正しい睡眠・心拍を整える・苦味(緑茶等)。" },
+  土: { organ: "脾・胃・消化", excess: "食べ過ぎや思い悩みで胃に来やすい。", lack: "消化力・体力が落ちやすい。温かい食事を。", care: "腹八分・規則的な食事・自然な甘味。" },
+  金: { organ: "肺・大腸・皮膚", excess: "完璧主義で呼吸が浅くなりがち。緩めて。", lack: "乾燥・風邪・肌トラブルに注意。", care: "深呼吸・保湿・適度な発散。" },
+  水: { organ: "腎・膀胱・骨・耳", excess: "冷え・むくみ・恐れすぎに注意。", lack: "スタミナ・足腰が弱りやすい。温活を。", care: "下半身を冷やさない・休養重視・塩分控えめ。" },
+};
+
+// 命式の五行バランスを集計（4柱の天干＋地支蔵干）
+function fiveBalance(c) {
+  const counts = { 木: 0, 火: 0, 土: 0, 金: 0, 水: 0 };
+  for (const pil of [c.yearPillar, c.monthPillar, c.dayPillar, c.hourPillar]) {
+    if (!pil) continue;
+    const stem = String(pil).slice(0, 1), branch = String(pil).slice(-1);
+    if (FIVE[stem]) counts[FIVE[stem]]++;
+    const hid = HIDDEN[branch];
+    if (hid && FIVE[hid]) counts[FIVE[hid]]++;
+  }
+  const entries = Object.entries(counts);
+  const strong = entries.reduce((a, b) => (b[1] > a[1] ? b : a))[0];
+  const weak = entries.reduce((a, b) => (b[1] < a[1] ? b : a))[0];
+  return { counts, strong, weak };
+}
+
+// 分野別アドバイスを返す。出生情報が無ければ null。
+export function advisor(birth, dateISO) {
+  try {
+    if (!birth || !birth.date) return null;
+    const c = computeChart(birth);
+    const me = c.dayMaster;
+    if (!me) return null;
+    const meElem = FIVE[me];
+    const detail = sanmeiDetail(birth);
+    const un = sanmeiUn(birth, dateISO);
+    const dai = daiun(birth);
+    const ten = tenchusatsu(birth);
+    const fb = fiveBalance(c);
+    const center = detail && detail.center;
+    const stars = (detail && detail.stars) || [];
+    const east = stars.find((s) => s.pos === "east");
+    const west = stars.find((s) => s.pos === "west");
+    const dayType = detail && detail.dayType;
+
+    // ── ビジネス（仕事・お金）──
+    const business = { headline: center ? `${center.star}・${center.title}型の経営キャラ` : "ビジネスの指針", points: [] };
+    if (center) business.points.push(center.biz);
+    if (dai && dai.current && !dai.preStart) business.points.push(`いまの大運（${dai.current.ageFrom}〜${dai.current.ageTo}歳）は ${dai.current.star}：${dai.current.theme}`);
+    if (un && un.year) business.points.push(`今年の流れは ${un.year.star}。${un.year.move}`);
+    business.points.push(`不足しがちな「${fb.weak}」の動き（${ELEM_ACTION[fb.weak]}）を仕組みや仲間で補うと、幅と安定が出ます。`);
+
+    // ── 恋愛・人間関係 ──
+    const love = { headline: dayType ? `${dayType.label}` : "人間関係の指針", points: [] };
+    if (LOVE_BY_ELEM[meElem]) love.points.push(LOVE_BY_ELEM[meElem]);
+    if (east) love.points.push(`パートナー・家庭での出方：${east.star}（${east.title}）。${east.desc}`);
+    if (west) love.points.push(`友人・仲間うちでの魅力：${west.star}（${west.title}）。`);
+    love.points.push(`「${GEN[meElem]}」の気質を持つ人には安らぎを、「${CTRL[meElem]}」の気質を持つ人には刺激を受けやすい傾向。`);
+
+    // ── 健康・コンディション（医療ではなく養生の目安）──
+    const hs = ELEM_HEALTH[fb.strong], hw = ELEM_HEALTH[fb.weak];
+    const health = {
+      headline: `五行バランス：強「${fb.strong}」／弱「${fb.weak}」`,
+      points: [],
+      note: "※ 算命学の五行に基づく自己管理の目安です。医療的な診断ではありません。気になる不調が続くときは医療機関にご相談ください。",
+    };
+    if (hs) health.points.push(`強い「${fb.strong}」（${hs.organ}）：${hs.excess}`);
+    if (hw && fb.strong !== fb.weak) health.points.push(`弱い「${fb.weak}」（${hw.organ}）：${hw.lack}`);
+    if (hw) health.points.push(`養生のヒント：${hw.care}`);
+    if (un && un.day && un.day.stance === "守り") health.points.push("今日は守りの日。無理をせず、休養・回復を優先に。");
+
+    // ── 今日の指針 ──
+    const today = { headline: un && un.day ? `今日は ${un.day.star}（${un.day.stance}）` : "今日の指針", points: [] };
+    if (un && un.day) today.points.push(un.day.move);
+    if (ten && Array.isArray(ten.years) && ten.years.length) today.points.push(`天中殺の年（${ten.years.join("・")}年）は、拡大より整理・充電・内省が吉。`);
+    today.points.push("迷ったら、上の各分野のうち“いま一番動かしたい場所”から一歩を。");
+
+    return { fiveElements: fb, business, love, health, today };
+  } catch { return null; }
+}

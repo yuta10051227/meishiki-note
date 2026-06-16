@@ -30,7 +30,7 @@
       import { createRoot } from "https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1";
       import htm from "https://esm.sh/htm@3.1.1";
       import {
-        sanmeiDetail, sanmeiUn, tenchusatsu, daiun, aishou, computeChart,
+        sanmeiDetail, sanmeiUn, tenchusatsu, daiun, aishou, computeChart, advisor,
       } from "./natal.js";
 
       const html = htm.bind(React.createElement);
@@ -241,6 +241,26 @@
         </div>`;
       }
 
+      // ── 専属占術師アドバイス（分野別タブ）──
+      function Advisor({ adv }) {
+        const tabs = [["business", "💼 ビジネス"], ["love", "💞 人間関係"], ["health", "🌿 健康"], ["today", "📅 今日"]];
+        const [t, setT] = useState("business");
+        const d = adv[t] || { headline: "", points: [] };
+        return html`<div>
+          <div style=${{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+            ${tabs.map(([k, label]) => {
+              const on = t === k;
+              return html`<button key=${k} onClick=${() => setT(k)} style=${{ border: `1px solid ${on ? C.accent : C.line}`, background: on ? C.accent + "22" : C.panel2, color: on ? C.accent : C.text, borderRadius: 999, padding: "6px 13px", fontSize: 13, cursor: "pointer", fontWeight: on ? 700 : 400 }}>${label}</button>`;
+            })}
+          </div>
+          <div style=${{ fontSize: 14, fontWeight: 700, marginBottom: 8, color: C.text }}>${d.headline}</div>
+          ${(d.points || []).map((p, i) => html`<div key=${i} style=${{ display: "flex", gap: 7, fontSize: 13, lineHeight: 1.7, color: C.sub, marginBottom: 7 }}>
+            <span style=${{ color: C.accent }}>▹</span><span>${p}</span>
+          </div>`)}
+          ${d.note && html`<div style=${{ fontSize: 11, color: C.faint, marginTop: 8, lineHeight: 1.6 }}>${d.note}</div>`}
+        </div>`;
+      }
+
       function App() {
         // 複数プロフィールを保持。選択中があれば初期値として復元（自動入力＆自動鑑定）。
         const [store, setStore] = useState(loadStore);
@@ -280,12 +300,14 @@
         const data = useMemo(() => {
           if (!birth) return null;
           try {
+            const today = new Date().toISOString().slice(0, 10);
             return {
               detail: sanmeiDetail(birth),
-              un: sanmeiUn(birth, new Date().toISOString().slice(0, 10)),
+              un: sanmeiUn(birth, today),
               ten: tenchusatsu(birth),
               dai: daiun(birth),
               chart: computeChart(birth),
+              advisor: advisor(birth, today),
             };
           } catch (e) { return { error: String(e.message || e) }; }
         }, [birth && birth.date, birth && birth.time, birth && birth.gender, birth && birth.place]);
@@ -341,6 +363,9 @@
             ${!birth.timeKnown && html`<div style=${{ fontSize: 12, color: C.accent, background: C.accent + "14", border: `1px solid ${C.accent}55`, borderRadius: 8, padding: "7px 10px", marginBottom: 10, lineHeight: 1.6 }}>
               出生時刻が未入力のため <b>12:00</b> として計算しています。時柱・ASC（上昇宮）は概算です。
             </div>`}
+            ${data.advisor && html`<${Section} title="専属占術師アドバイス" color=${C.accent} sub="あなたの命式から、ビジネス・人間関係・健康・今日の指針を読み解きます。">
+              <${Advisor} adv=${data.advisor} />
+            <//>`}
             ${data.detail && html`<${Section} title="算命学・人体星図" color=${C.purple} sub="生年月日から出す“心の設計図”。各星をタップで意味が出ます。">
               <${Jintai} detail=${data.detail} />
             <//>`}
