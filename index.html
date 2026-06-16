@@ -421,6 +421,7 @@ ${context}
         const [editingId, setEditingId] = useState(() => (initial ? initial.id : null));
         const [err, setErr] = useState("");
         const [apiKey, setApiKey] = useState(loadKey);
+        const [collapsed, setCollapsed] = useState(() => !!initial); // 保存復元時は入力を畳んで結果を見せる
 
         const persist = (next) => { setStore(next); saveStore(next); };
         const onSaveKey = (k) => { saveKey(k); setApiKey(k); };
@@ -436,20 +437,23 @@ ${context}
           persist({ profiles, currentId: id });
           setEditingId(id);
           setBirth(buildBirth(form));
+          setCollapsed(true); // 鑑定したら入力を畳む
         };
         const selectProfile = (id) => {
           const p = store.profiles.find((x) => x.id === id); if (!p) return;
           setErr(""); setForm({ ...DEFAULT_FORM, ...p }); setEditingId(id); setBirth(buildBirth(p));
           persist({ ...store, currentId: id });
+          setCollapsed(true);
         };
         const startNew = () => {
           setErr(""); setForm({ ...DEFAULT_FORM }); setEditingId(null); setBirth(null);
           persist({ ...store, currentId: null });
+          setCollapsed(false); // 新規入力のため開く
         };
         const deleteProfile = (id) => {
           const profiles = store.profiles.filter((p) => p.id !== id);
           persist({ profiles, currentId: store.currentId === id ? null : store.currentId });
-          if (editingId === id) { setEditingId(null); setForm({ ...DEFAULT_FORM }); setBirth(null); }
+          if (editingId === id) { setEditingId(null); setForm({ ...DEFAULT_FORM }); setBirth(null); setCollapsed(false); }
         };
         const data = useMemo(() => {
           if (!birth) return null;
@@ -473,6 +477,13 @@ ${context}
           </div>
 
           <div style=${card}>
+            <div onClick=${() => setCollapsed(!collapsed)} style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", marginBottom: collapsed ? 0 : 12 }}>
+              <span style=${{ fontSize: 14, fontWeight: 700, color: C.text }}>
+                ${collapsed ? "🗓 " + (birth ? `${birth.name || birth.date}${birth.name ? "（" + birth.date + "）" : ""}` : "生年月日の入力") : "生年月日の入力"}
+              </span>
+              <span style=${{ fontSize: 12, color: C.sub }}>${collapsed ? "開く ▼" : "折りたたむ ▲"}</span>
+            </div>
+            ${!collapsed && html`<div>
             ${store.profiles.length > 0 && html`<div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
               ${store.profiles.map((p) => {
                 const on = p.id === editingId;
@@ -509,6 +520,7 @@ ${context}
                 : "「鑑定して保存」でこの端末に保存します。家族・友人など複数人ぶん登録できます（外部送信なし）。"}
             </div>
             ${err && html`<div style=${{ fontSize: 13, color: C.red, marginTop: 8 }}>${err}</div>`}
+            </div>`}
           </div>
 
           ${data && data.error && html`<div style=${{ ...card, color: C.red }}>計算エラー：${data.error}</div>`}
