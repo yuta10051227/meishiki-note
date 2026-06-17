@@ -515,8 +515,11 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             <div style=${{ fontSize: 12, color: C.accent, background: C.accent + "14", border: `1px solid ${C.accent}55`, borderRadius: 8, padding: "8px 10px", marginBottom: 10, lineHeight: 1.7 }}>
               ⚠️ キーは<b>この端末（ブラウザ）にのみ</b>保存されます。相談を送ると、<b>命式と相談内容が Gemini（Google）に送信</b>されます（占いの計算自体は従来どおり端末内で完結）。Google AI Studio の<b>無料枠</b>で使えます（上限は Google の規定に従います）。
             </div>
+            ${!STORAGE_OK && html`<div style=${{ fontSize: 12, color: C.red, background: C.red + "14", border: `1px solid ${C.red}55`, borderRadius: 8, padding: "8px 10px", marginBottom: 10, lineHeight: 1.7 }}>
+              ⚠️ <b>このブラウザではキーを保存できません</b>（プライベートブラウズ、「サイトデータをブロック」、またはアプリ内の簡易ブラウザの可能性）。このまま入力すれば<b>今だけ</b>相談できますが、<b>再読み込みで消えます</b>。毎回入力が不要にするには、通常モードの Safari／Chrome で開き直してください。
+            </div>`}
             <input type="password" placeholder="AIza..." value=${draft} onInput=${(e) => setDraft(e.target.value)} style=${inp} />
-            <button onClick=${() => { if (draft.trim()) onSaveKey(draft.trim()); }} style=${{ ...inp, marginBottom: 0, background: C.green, color: C.onAccent, fontWeight: 700, border: "none", cursor: "pointer" }}>キーを保存して相談を始める</button>
+            <button onClick=${() => { if (draft.trim()) onSaveKey(draft.trim()); }} style=${{ ...inp, marginBottom: 0, background: C.green, color: C.onAccent, fontWeight: 700, border: "none", cursor: "pointer" }}>${STORAGE_OK ? "キーを保存して相談を始める" : "このセッションだけ使う"}</button>
           </div>`;
         }
 
@@ -526,7 +529,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             <button onClick=${() => setShowKey(!showKey)} style=${{ background: "none", border: "none", color: C.faint, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>キー設定</button>
           </div>
           ${showKey && html`<div style=${{ background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 12, color: C.sub }}>
-            APIキーはこの端末に保存中。<button onClick=${() => { onClearKey(); setMsgs([]); }} style=${{ background: "none", border: "none", color: C.red, cursor: "pointer", textDecoration: "underline", fontSize: 12 }}>キーを削除する</button>
+            ${STORAGE_OK ? "APIキーはこの端末に保存中。" : html`<span style=${{ color: C.red }}>⚠️ このセッションのみ有効（保存不可のブラウザ）。再読み込みで消えます。</span> `}<button onClick=${() => { onClearKey(); setMsgs([]); }} style=${{ background: "none", border: "none", color: C.red, cursor: "pointer", textDecoration: "underline", fontSize: 12 }}>キーを削除する</button>
           </div>`}
 
           ${msgs.length === 0 && html`<div style=${{ marginBottom: 10 }}>
