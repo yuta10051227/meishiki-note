@@ -30,7 +30,7 @@
       import { createRoot } from "https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1";
       import htm from "https://esm.sh/htm@3.1.1";
       import {
-        sanmeiDetail, sanmeiUn, tenchusatsu, daiun, aishou, computeChart, advisor,
+        sanmeiDetail, sanmeiUn, tenchusatsu, daiun, aishou, computeChart, advisor, stancesFor,
       } from "./natal.js";
 
       const html = htm.bind(React.createElement);
@@ -120,7 +120,7 @@
 
       // ── カスタマイズ設定（端末内に保存）──
       const SETTINGS_STORE = "meishiki-note:settings:v1";
-      const DEFAULT_SECTIONS = { advisor: true, chat: true, jintai: true, un: true, unsei: true, aishou: true, astro: true };
+      const DEFAULT_SECTIONS = { advisor: true, chat: true, calendar: true, jintai: true, un: true, unsei: true, aishou: true, astro: true };
       const DEFAULT_SETTINGS = { tone: "gentle", oracleName: "", replyLength: "normal", sections: { ...DEFAULT_SECTIONS } };
       const loadSettings = () => {
         try {
@@ -209,6 +209,89 @@
           <div style=${{ fontSize: 15, fontWeight: 700, color: color || C.text, marginBottom: sub ? 2 : 10 }}>${title}</div>
           ${sub && html`<div style=${{ fontSize: 12, color: C.faint, marginBottom: 10 }}>${sub}</div>`}
           ${children}
+        </div>`;
+      }
+
+      // ── 占術カレンダー（日ごとの気の流れ・天中殺日）──
+      // relationFor 由来の日別スタンス(攻め/労い/整える/守り)を月グリッドに描画。
+      // 天中殺日は本人の天中殺の十二支に当たる日。すべて端末内計算。
+      const pad2 = (n) => String(n).padStart(2, "0");
+      const stanceColor = (st) => st === "攻め" ? C.green : st === "労い" ? C.blue : st === "守り" ? C.red : C.accent;
+      const stanceEmoji = (st) => st === "攻め" ? "🚀" : st === "労い" ? "🌿" : st === "守り" ? "🛡" : "⚖️";
+      function Calendar({ birth, ten }) {
+        const now = new Date();
+        const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() });
+        const [selDay, setSelDay] = useState(now.getDate());
+        const { y, m } = ym;
+        const todayISO = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+        const dim = new Date(y, m + 1, 0).getDate();
+        const firstDow = new Date(y, m, 1).getDay();
+        const tenBranches = (ten && ten.branches) || [];
+        const stances = useMemo(() => {
+          const dates = [];
+          for (let d = 1; d <= dim; d++) dates.push(`${y}-${pad2(m + 1)}-${pad2(d)}`);
+          return stancesFor(birth, dates);
+        }, [birth && birth.date, birth && birth.time, birth && birth.place, y, m]);
+        const move = (delta) => {
+          let nm = m + delta, ny = y;
+          if (nm < 0) { nm = 11; ny--; } if (nm > 11) { nm = 0; ny++; }
+          setYm({ y: ny, m: nm });
+          setSelDay(ny === now.getFullYear() && nm === now.getMonth() ? now.getDate() : null);
+        };
+        const WD = ["日", "月", "火", "水", "木", "金", "土"];
+        const cells = [];
+        for (let i = 0; i < firstDow; i++) cells.push(null);
+        for (let d = 1; d <= dim; d++) cells.push(d);
+        const isoOf = (d) => `${y}-${pad2(m + 1)}-${pad2(d)}`;
+        const navBtn = { background: C.panel2, border: `1px solid ${C.line}`, color: C.text, borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 15 };
+
+        const selInfo = selDay ? stances[isoOf(selDay)] : null;
+        const selTen = selInfo && tenBranches.includes(selInfo.branch);
+
+        return html`<div>
+          <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <button onClick=${() => move(-1)} style=${navBtn}>‹</button>
+            <span style=${{ fontSize: 15, fontWeight: 700, color: C.text }}>${y}年 ${m + 1}月</span>
+            <button onClick=${() => move(1)} style=${navBtn}>›</button>
+          </div>
+          <div style=${{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 3, marginBottom: 4 }}>
+            ${WD.map((w, i) => html`<div key=${w} style=${{ textAlign: "center", fontSize: 11, fontWeight: 700, color: i === 0 ? C.red : i === 6 ? C.blue : C.faint }}>${w}</div>`)}
+          </div>
+          <div style=${{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 3 }}>
+            ${cells.map((d, i) => {
+              if (d == null) return html`<span key=${"b" + i}></span>`;
+              const info = stances[isoOf(d)];
+              const col = info ? stanceColor(info.stance) : C.line;
+              const isToday = isoOf(d) === todayISO;
+              const isSel = d === selDay;
+              const isTen = info && tenBranches.includes(info.branch);
+              return html`<button key=${d} onClick=${() => setSelDay(d)} style=${{
+                position: "relative", aspectRatio: "1 / 1", display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center", gap: 1, cursor: "pointer",
+                background: info ? col + "22" : C.panel2,
+                border: `${isSel ? 2 : 1}px solid ${isSel ? col : isToday ? C.text : C.line}`,
+                borderRadius: 9, padding: 2, color: C.text, lineHeight: 1.1,
+              }}>
+                <span style=${{ fontSize: 13, fontWeight: isToday ? 800 : 600 }}>${d}</span>
+                ${info && html`<span style=${{ fontSize: 9, color: C.faint }}>${info.ganZhi}</span>`}
+                ${info && html`<span style=${{ fontSize: 11 }}>${stanceEmoji(info.stance)}</span>`}
+                ${isTen && html`<span style=${{ position: "absolute", top: 1, right: 3, fontSize: 8, color: C.red, fontWeight: 700 }}>天</span>`}
+              </button>`;
+            })}
+          </div>
+          <div style=${{ display: "flex", flexWrap: "wrap", gap: "4px 12px", margin: "10px 0", fontSize: 11, color: C.sub }}>
+            ${[["攻め", "🚀"], ["労い", "🌿"], ["整える", "⚖️"], ["守り", "🛡"]].map(([st, e]) => html`<span key=${st} style=${{ display: "inline-flex", alignItems: "center", gap: 3 }}><span style=${{ width: 9, height: 9, borderRadius: 3, background: stanceColor(st) }}></span>${e} ${st}</span>`)}
+            <span style=${{ color: C.red }}>天 = 天中殺日</span>
+          </div>
+          ${selInfo && html`<div style=${{ background: C.panel2, border: `1px solid ${stanceColor(selInfo.stance)}`, borderRadius: 10, padding: 12 }}>
+            <div style=${{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>
+              ${m + 1}月${selDay}日（${WD[new Date(y, m, selDay).getDay()]}）・${selInfo.ganZhi}
+              <span style=${{ color: stanceColor(selInfo.stance) }}>${stanceEmoji(selInfo.stance)} ${selInfo.stance}</span>
+            </div>
+            <div style=${{ fontSize: 12, color: C.sub, marginBottom: 4 }}>${selInfo.relation}</div>
+            <div style=${{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>${selInfo.focus}</div>
+            ${selTen && html`<div style=${{ fontSize: 12, color: C.red, marginTop: 6, lineHeight: 1.6 }}>⚠️ 天中殺日：新規拡大より、整理・内省・充電が吉。大きな決断や契約は避けて。</div>`}
+          </div>`}
         </div>`;
       }
 
@@ -475,7 +558,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         const set = (patch) => onChange({ ...settings, ...patch });
         const setSection = (k, v) => onChange({ ...settings, sections: { ...settings.sections, [k]: v } });
         const lbl = { fontSize: 12, color: C.sub, display: "block", margin: "0 0 2px" };
-        const SEC = [["advisor", "専属占術師アドバイス"], ["chat", "AI相談"], ["jintai", "人体星図"], ["un", "今日・今月・今年の運氣"], ["unsei", "天中殺・大運"], ["aishou", "相性"], ["astro", "西洋・インド占星術"]];
+        const SEC = [["advisor", "専属占術師アドバイス"], ["chat", "AI相談"], ["calendar", "占術カレンダー"], ["jintai", "人体星図"], ["un", "今日・今月・今年の運氣"], ["unsei", "天中殺・大運"], ["aishou", "相性"], ["astro", "西洋・インド占星術"]];
         return html`<div style=${card}>
           <div onClick=${() => setOpen(!open)} style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
             <span style=${{ fontSize: 14, fontWeight: 700, color: C.text }}>⚙️ 設定・カスタマイズ</span>
@@ -646,6 +729,9 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             <//>`}
             ${sec.chat && html`<${Section} title="AIに相談する（占い師チャット）" color=${C.green} sub="あなたの命式を踏まえて、占い師に直接相談できます。※相談時は命式と相談内容を Gemini に送信します。">
               <${Chat} key=${`${birth.date}|${birth.time}|${birth.place}|${editingId || ""}`} apiKey=${apiKey} onSaveKey=${onSaveKey} onClearKey=${onClearKey} context=${buildOracleContext(data, birth)} name=${birth.name} tone=${settings.tone} replyLength=${settings.replyLength} oracleName=${settings.oracleName} />
+            <//>`}
+            ${sec.calendar && data.ten !== undefined && html`<${Section} title="占術カレンダー" color=${C.blue} sub="日ごとの「気」の流れ（攻め／労い／整える／守り）と天中殺日。日付をタップで詳しく。">
+              <${Calendar} birth=${birth} ten=${data.ten} />
             <//>`}
             ${sec.jintai && data.detail && html`<${Section} title="算命学・人体星図" color=${C.purple} sub="生年月日から出す“心の設計図”。各星をタップで意味が出ます。">
               <${Jintai} detail=${data.detail} />
