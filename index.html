@@ -40,7 +40,7 @@
   <body>
     <div id="root"></div>
     <script type="module">
-      import React, { useState, useMemo } from "https://esm.sh/react@18.3.1";
+      import React, { useState, useMemo, useEffect } from "https://esm.sh/react@18.3.1";
       import { createRoot } from "https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1";
       import htm from "https://esm.sh/htm@3.1.1";
       import {
@@ -208,10 +208,42 @@
         return { ...LUCKY_BY_ELEM[elem], elem, time: BRANCH_TIME[branch] || "—" };
       };
 
+      // ── 「今日の小さな一歩」：日付＋本人で変わる具体ヒント（固定文の使い回し感を解消）──
+      // 占い用語を避けた行動プロンプト。毎日違う・人によっても違う。オフライン/鍵なしでも新鮮。
+      const DAILY_TIPS = [
+        "未読のままの連絡に、ひとつだけ返信してみる。", "机の上を5分だけ片づけると、頭も軽くなる日。",
+        "いつもの道を一本ずらして歩く。小さな発見がヒントに。", "「ありがとう」を一度、声に出して伝えてみる。",
+        "やめたいことを一つ、今日だけ休んでみる。", "気になっていた人に、こちらから一言かけてみる。",
+        "5分の散歩で、考えごとが整理される日。", "やることリストの一番上だけ、先に片づける。",
+        "水を一杯多めに。体が整うと判断も冴える。", "完璧を狙わず、7割で出してみる。",
+        "昔のメモや写真を見返すと、次の一手が見える。", "断る勇気が、今日は良い結果を呼ぶ。",
+        "小さな出費を一つ見直してみる。", "背筋を伸ばして深呼吸を3回。流れが変わる。",
+        "今日会う人の良いところを、心の中で一つ挙げる。", "先延ばしの連絡を、今日こそ一通。",
+        "新しい店・新しい味に挑戦してみる日。", "10分早く寝る準備を。明日の自分への贈り物。",
+        "迷ったら、ワクワクする方を選んでみる。", "誰かに小さな頼みごとをしてみる。頼り上手の日。",
+        "苦手な作業を、最初の5分だけやってみる。", "今日の予定を一つ減らして、余白をつくる。",
+        "目についた場所を一か所だけ磨く。運気の通り道に。", "感謝のメッセージを一通送る。",
+        "結論を急がず、一晩寝かせると吉。", "身につける色を、いつもと変えてみる。",
+        "古いものを一つ手放すと、新しい流れが来る。", "声のトーンを少し上げて話してみる。",
+        "今日は聞き役に回ると、思わぬ情報が入る。", "短くてもいいので、外の空気を吸う。",
+        "やりたかったことを、5分だけ始めてみる。", "お金の話は、数字を見てから決める。",
+        "笑える動画を一本。緊張がほどけて巡りが良くなる。", "今日の自分を、小さく一つほめる。",
+        "連絡先を整理すると、人間関係も軽くなる。", "甘いものは少なめ、温かいものを選ぶと吉。",
+        "一人の時間を15分つくって、頭を休める。", "気になる学びを、検索一回だけしてみる。",
+        "約束は早めに確認。すれ違いを防げる日。", "姿勢よく、いつもよりゆっくり歩く。",
+      ];
+      const strHash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) | 0; } return Math.abs(h); };
+      const dailyTip = (dateISO, seed) => DAILY_TIPS[strHash(`${dateISO}|${seed || ""}`) % DAILY_TIPS.length];
+
+      // ── AI「今日の一言」：本人の命式×今日の干支で毎日ユニークに生成。1日1回キャッシュ。──
+      const DAILY_AI_STORE = "meishiki-note:dailyai:v1";
+      const getDailyAI = (pkey, iso) => { try { const e = (JSON.parse(localStorage.getItem(DAILY_AI_STORE) || "{}") || {})[pkey]; return e && e.date === iso ? e.text : ""; } catch { return ""; } };
+      const setDailyAI = (pkey, iso, text) => { try { const o = JSON.parse(localStorage.getItem(DAILY_AI_STORE) || "{}") || {}; o[pkey] = { date: iso, text }; localStorage.setItem(DAILY_AI_STORE, JSON.stringify(o)); } catch {} };
+
       // ── カスタマイズ設定（端末内に保存）──
       const SETTINGS_STORE = "meishiki-note:settings:v1";
       const DEFAULT_SECTIONS = { advisor: true, chat: true, calendar: true, jintai: true, un: true, unsei: true, aishou: true, astro: true };
-      const DEFAULT_SETTINGS = { tone: "gentle", oracleName: "", replyLength: "normal", sections: { ...DEFAULT_SECTIONS } };
+      const DEFAULT_SETTINGS = { tone: "gentle", oracleName: "", replyLength: "normal", dailyOracle: true, sections: { ...DEFAULT_SECTIONS } };
       const loadSettings = () => {
         try {
           const s = JSON.parse(localStorage.getItem(SETTINGS_STORE) || "null") || {};
@@ -681,6 +713,10 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             <select value=${settings.replyLength} onChange=${(e) => set({ replyLength: e.target.value })} style=${inp}>
               ${Object.entries(LENGTH_LABELS).map(([k, v]) => html`<option key=${k} value=${k}>${v}</option>`)}
             </select>
+            <button onClick=${() => set({ dailyOracle: settings.dailyOracle === false })} style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, padding: "10px 12px", marginBottom: 10, cursor: "pointer", color: C.text }}>
+              <span style=${{ fontSize: 13, textAlign: "left" }}>「今日の一言」をAIで毎日生成<br /><span style=${{ fontSize: 11, color: C.faint }}>命式×今日の干支で、毎日ちがう一言（APIキー必要・1日1回）</span></span>
+              <span style=${{ fontSize: 13, fontWeight: 700, color: settings.dailyOracle !== false ? C.green : C.faint }}>${settings.dailyOracle !== false ? "ON" : "OFF"}</span>
+            </button>
             <div style=${{ fontSize: 12, color: C.sub, margin: "4px 0 6px" }}>表示するセクション（タップでON/OFF）</div>
             <div style=${{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               ${SEC.map(([k, label]) => {
@@ -714,13 +750,33 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
 
       // ── 今日のヒーロー（毎日開く動機・最上部に常設）──
       const WD_JP = ["日", "月", "火", "水", "木", "金", "土"];
-      function TodayHero({ un, visit, name, celebrate }) {
+      function TodayHero({ un, visit, name, celebrate, apiKey, context, birth, dailyOracle }) {
         const d = un.day;
         const col = stanceColor(d.stance);
         const lucky = luckyOf(un);
         const [msg, setMsg] = useState("");
         const now = new Date();
         const dateLabel = `${now.getMonth() + 1}月${now.getDate()}日(${WD_JP[now.getDay()]})`;
+        const todayISO = now.toISOString().slice(0, 10);
+        const seed = birth ? `${birth.date}|${birth.time}|${birth.place}` : "";
+        const tip = dailyTip(todayISO, seed);
+
+        // AI「今日の一言」：鍵があり設定ONなら、1日1回だけ生成してキャッシュ
+        const aiOn = !!apiKey && dailyOracle !== false;
+        const [aiText, setAiText] = useState(() => (aiOn ? getDailyAI(seed, todayISO) : ""));
+        const [aiBusy, setAiBusy] = useState(false);
+        const genDaily = async (force) => {
+          if (!aiOn || aiBusy) return;
+          if (!force) { const c = getDailyAI(seed, todayISO); if (c) { setAiText(c); return; } }
+          setAiBusy(true);
+          try {
+            const sys = `あなたは相談者の専属占術師です。下の命式を踏まえ、今日この人に向けた“今日だけの具体的な一言”を、前向きに、的を1つに絞って日本語2文以内で。占い用語は噛み砕く。挨拶や前置きは不要。\n# 命式\n${context || ""}`;
+            const user = `今日は${dateLabel}。日の干支は${d.ganzhi}（重なる星：${d.star}／気のスタンス：${d.stance}）。この人の今日の過ごし方を2文以内で。`;
+            const t = await callGemini(apiKey, sys, [{ role: "user", content: user }]);
+            if (t) { setAiText(t); setDailyAI(seed, todayISO, t); }
+          } catch (e) { /* 失敗時は決定論ヒントで代替 */ } finally { setAiBusy(false); }
+        };
+        useEffect(() => { if (aiOn && !aiText) genDaily(false); }, []);
         const onShare = async () => {
           const luckyLine = lucky ? `\nラッキー：${lucky.color}／${lucky.dir}の方角` : "";
           const text = `【命式ノート】${dateLabel}の運氣：${d.star}・${d.stance}\n${d.move}${luckyLine}`;
@@ -735,8 +791,16 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             ${visit && visit.streak > 1 && html`<span style=${{ fontSize: 12, fontWeight: 700, color: C.accent }}>🔥 ${visit.streak}日連続${visit.best > visit.streak ? `（最高${visit.best}）` : ""}</span>`}
           </div>
           ${celebrate > 0 && html`<div style=${{ background: C.accent + "22", border: `1px solid ${C.accent}`, borderRadius: 10, padding: "7px 10px", marginBottom: 8, fontSize: 13, fontWeight: 700, color: C.accent, textAlign: "center" }}>🎉 ${celebrate}日連続 達成！この調子で続けましょう</div>`}
-          <div style=${{ fontSize: 20, fontWeight: 800, color: col, marginBottom: 4 }}>${d.emoji} ${d.star} ・ ${d.stance}</div>
+          ${(aiText || aiBusy) && html`<div style=${{ background: C.panel2, border: `1px solid ${C.purple}55`, borderRadius: 12, padding: "10px 12px", marginBottom: 10 }}>
+            <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: aiText ? 4 : 0 }}>
+              <span style=${{ fontSize: 12, fontWeight: 700, color: C.purple }}>🔮 今日の一言</span>
+              ${aiText && !aiBusy && html`<button onClick=${() => genDaily(true)} title="別の言い方で" style=${{ background: "none", border: "none", color: C.faint, fontSize: 12, cursor: "pointer" }}>🔄 別の言い方</button>`}
+            </div>
+            ${aiBusy ? html`<span style=${{ fontSize: 13, color: C.faint }}>占っています…</span>` : html`<div style=${{ fontSize: 14, lineHeight: 1.7, color: C.text, whiteSpace: "pre-wrap" }}>${aiText}</div>`}
+          </div>`}
+          <div style=${{ fontSize: 20, fontWeight: 800, color: col, marginBottom: 4 }}>${d.emoji} ${d.star} ・ ${d.stance}（${d.ganzhi}）</div>
           <div style=${{ fontSize: 14, lineHeight: 1.7, color: C.text, marginBottom: 10 }}>${d.move}</div>
+          <div style=${{ background: col + "14", borderLeft: `3px solid ${col}`, borderRadius: 6, padding: "8px 11px", marginBottom: 10, fontSize: 13, lineHeight: 1.6, color: C.text }}>🌱 今日の小さな一歩：${tip}</div>
           ${lucky && html`<div style=${{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6, marginBottom: 10 }}>
             <div style=${{ background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, padding: "5px 9px", fontSize: 12, color: C.sub, lineHeight: 1.3 }}>ラッキー色<br /><span style=${{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style=${{ width: 10, height: 10, borderRadius: 3, background: lucky.hex, display: "inline-block" }}></span><b style=${{ color: C.text, fontSize: 13 }}>${lucky.color}</b></span></div>
             ${chip("方角", lucky.dir)}
@@ -936,7 +1000,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             ${sampleMode && html`<div style=${{ background: C.purple + "1A", border: `1px solid ${C.purple}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12, fontSize: 13, color: C.text, lineHeight: 1.6 }}>
               👀 これは<b>サンプル表示</b>です。<button onClick=${startNew} style=${{ background: C.purple, color: C.onAccent, border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginLeft: 4 }}>自分の生年月日で見る</button>
             </div>`}
-            ${data.un && html`<${TodayHero} un=${data.un} visit=${visit} celebrate=${celebrate} name=${sampleMode ? "" : birth.name} />`}
+            ${data.un && html`<${TodayHero} key=${`${birth.date}|${birth.time}|${birth.place}|${sampleMode ? "s" : ""}`} un=${data.un} visit=${visit} celebrate=${celebrate} name=${sampleMode ? "" : birth.name} apiKey=${sampleMode ? "" : apiKey} context=${buildOracleContext(data, birth)} birth=${birth} dailyOracle=${settings.dailyOracle} />`}
             ${!sampleMode && html`<div style=${{ ...card }}>
               <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
                 <span style=${{ fontSize: 15, fontWeight: 700, color: C.green }}>📔 今日の記録</span>
