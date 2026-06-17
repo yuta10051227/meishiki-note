@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0F1115" />
+    <meta name="description" content="生年月日から算命学・四柱推命・西洋＆インド占星術を自前計算。毎日の運氣・占術カレンダー・AI相談。" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="./icon-192.png" />
+    <link rel="apple-touch-icon" href="./icon-180.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="命式ノート" />
     <title>命式ノート — 算命学・四柱推命・占星術</title>
     <style>
       html, body, #root { height: 100%; margin: 0; }
@@ -19,8 +27,14 @@
         if (!r || r.childElementCount > 0) return;
         var msg = (e.error && e.error.stack) || e.message || "読み込みエラー";
         if (/extension:\/\//.test(String(msg))) return;
-        r.innerHTML = "<div style='padding:20px;font-size:13px;color:#9AA1AC'><b style='color:#E2554B'>読み込みの問題</b><pre style='white-space:pre-wrap;background:#171A21;padding:12px;border-radius:8px'>" + String(msg) + "</pre>（ネット接続が必要です。esm.sh から React と計算ライブラリを読み込みます）</div>";
+        r.innerHTML = "<div style='padding:20px;font-size:13px;color:#9AA1AC'><b style='color:#E2554B'>読み込みの問題</b><pre style='white-space:pre-wrap;background:#171A21;padding:12px;border-radius:8px'>" + String(msg) + "</pre>（初回はネット接続が必要です。esm.sh から React と計算ライブラリを読み込みます。一度開けば次回からオフラインでも起動します）</div>";
       }, true);
+      // PWA: Service Worker を登録（オフライン起動・ホーム画面追加用）。相対パスで配信先サブパスに追従。
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker.register("./sw.js").catch(function () {});
+        });
+      }
     </script>
   </head>
   <body>
@@ -117,6 +131,40 @@
       const loadKey = () => { try { return localStorage.getItem(KEY_STORE) || ""; } catch { return ""; } };
       const saveKey = (k) => { try { localStorage.setItem(KEY_STORE, k); } catch {} };
       const clearKey = () => { try { localStorage.removeItem(KEY_STORE); } catch {} };
+
+      // ── 連続来訪ストリーク（毎日開く動機づけ・習慣化）──
+      const VISIT_STORE = "meishiki-note:visit:v1";
+      const ymd = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+      const loadVisit = () => { try { return JSON.parse(localStorage.getItem(VISIT_STORE) || "null") || {}; } catch { return {}; } };
+      // 来訪を記録し、ストリーク情報 { streak, best, days, last } を返す（1日1回だけ加算）
+      const touchVisit = () => {
+        const today = ymd(new Date());
+        const yest = ymd(new Date(Date.now() - 86400000));
+        const v = loadVisit();
+        if (v.last !== today) {
+          v.streak = v.last === yest ? (v.streak || 0) + 1 : 1;
+          v.days = (v.days || 0) + 1;
+          v.last = today;
+        }
+        v.streak = v.streak || 1;
+        v.best = Math.max(v.best || 0, v.streak);
+        try { localStorage.setItem(VISIT_STORE, JSON.stringify(v)); } catch {}
+        return v;
+      };
+
+      // ── 共有（再来訪・口コミ導線）。Web Share→無ければクリップボード。──
+      const shareApp = async (text) => {
+        const url = location.href;
+        try { if (navigator.share) { await navigator.share({ title: "命式ノート", text, url }); return "shared"; } } catch (e) { if (String(e && e.name) === "AbortError") return "shared"; }
+        try { await navigator.clipboard.writeText(`${text}\n${url}`); return "copied"; } catch {}
+        return "fail";
+      };
+      const copyUrl = async () => { try { await navigator.clipboard.writeText(location.href); return true; } catch { return false; } };
+      // スタンドアロン（ホーム画面から起動）判定
+      const isStandalone = () => {
+        try { return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true; } catch { return false; }
+      };
+      const isIOS = () => { try { return /iphone|ipad|ipod/i.test(navigator.userAgent); } catch { return false; } };
 
       // ── カスタマイズ設定（端末内に保存）──
       const SETTINGS_STORE = "meishiki-note:settings:v1";
@@ -597,6 +645,81 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         </div>`;
       }
 
+      // ── 今日のヒーロー（毎日開く動機・最上部に常設）──
+      const WD_JP = ["日", "月", "火", "水", "木", "金", "土"];
+      function TodayHero({ un, visit, name }) {
+        const d = un.day;
+        const col = stanceColor(d.stance);
+        const [msg, setMsg] = useState("");
+        const now = new Date();
+        const dateLabel = `${now.getMonth() + 1}月${now.getDate()}日(${WD_JP[now.getDay()]})`;
+        const onShare = async () => {
+          const text = `【命式ノート】${dateLabel}の運氣：${d.star}・${d.stance}\n${d.move}`;
+          const r = await shareApp(text);
+          if (r === "copied") { setMsg("リンクをコピーしました"); setTimeout(() => setMsg(""), 2200); }
+          else if (r === "fail") { setMsg("共有できませんでした"); setTimeout(() => setMsg(""), 2200); }
+        };
+        return html`<div style=${{ background: `linear-gradient(135deg, ${col}26, ${C.panel})`, border: `1px solid ${col}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
+          <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <span style=${{ fontSize: 12, color: C.sub }}>🌙 ${dateLabel} の運氣${name ? `・${name} さん` : ""}</span>
+            ${visit && visit.streak > 1 && html`<span style=${{ fontSize: 12, fontWeight: 700, color: C.accent }}>🔥 ${visit.streak}日連続</span>`}
+          </div>
+          <div style=${{ fontSize: 20, fontWeight: 800, color: col, marginBottom: 4 }}>${d.emoji} ${d.star} ・ ${d.stance}</div>
+          <div style=${{ fontSize: 14, lineHeight: 1.7, color: C.text, marginBottom: 10 }}>${d.move}</div>
+          <div style=${{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick=${onShare} style=${{ background: C.panel2, border: `1px solid ${C.line}`, color: C.text, borderRadius: 999, padding: "6px 14px", fontSize: 13, cursor: "pointer" }}>🔗 今日の運氣をシェア</button>
+            ${msg && html`<span style=${{ fontSize: 12, color: C.green }}>${msg}</span>`}
+          </div>
+        </div>`;
+      }
+
+      // ── 初回オンボーディング（価値訴求＋サンプル体験で初回離脱を防ぐ）──
+      function Onboarding({ onSample }) {
+        const items = [["🗓", "毎日の運氣と占術カレンダーで“今日の動き方”がわかる"], ["🧭", "あなたの性質・才能・人生の流れ（人体星図・大運）"], ["💞", "相性診断と、AI占い師への相談"]];
+        return html`<div style=${{ background: `linear-gradient(135deg, ${C.purple}26, ${C.panel})`, border: `1px solid ${C.purple}`, borderRadius: 16, padding: 18, marginBottom: 14 }}>
+          <div style=${{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>🌙 ようこそ、命式ノートへ</div>
+          <div style=${{ fontSize: 13, color: C.sub, lineHeight: 1.8, marginBottom: 10 }}>生年月日を入れるだけで、算命学・四柱推命・西洋＆インド占星術をまとめて自前計算します。</div>
+          ${items.map(([e, t], i) => html`<div key=${i} style=${{ display: "flex", gap: 8, fontSize: 13, lineHeight: 1.7, marginBottom: 5 }}><span>${e}</span><span style=${{ color: C.text }}>${t}</span></div>`)}
+          <button onClick=${onSample} style=${{ marginTop: 10, width: "100%", background: C.purple, color: C.onAccent, border: "none", borderRadius: 10, padding: "11px", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>まずはサンプルで体験する</button>
+          <div style=${{ fontSize: 12, color: C.faint, textAlign: "center", marginTop: 6 }}>↓ 下の「生年月日の入力」に自分の情報を入れてもOK</div>
+        </div>`;
+      }
+
+      // ── ホーム画面に追加の案内（PWAインストール導線・1回閉じたら出さない）──
+      const INSTALL_TIP_STORE = "meishiki-note:installtip:v1";
+      function InstallTip() {
+        const [show, setShow] = useState(() => {
+          try { if (isStandalone()) return false; if (localStorage.getItem(INSTALL_TIP_STORE) === "1") return false; } catch {}
+          return true;
+        });
+        if (!show) return null;
+        const dismiss = () => { try { localStorage.setItem(INSTALL_TIP_STORE, "1"); } catch {} setShow(false); };
+        return html`<div style=${{ ...card, borderStyle: "dashed" }}>
+          <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+            <div style=${{ fontSize: 13, color: C.sub, lineHeight: 1.7 }}>
+              <b style=${{ color: C.text }}>📲 ホーム画面に追加</b>すると、アプリのように開けて<b>オフラインでも</b>占えます。<br />
+              ${isIOS() ? "Safari下部の「共有」ボタン →「ホーム画面に追加」。" : "ブラウザのメニュー →「アプリをインストール」または「ホーム画面に追加」。"}
+            </div>
+            <button onClick=${dismiss} title="閉じる" style=${{ background: "none", border: "none", color: C.faint, fontSize: 18, cursor: "pointer", lineHeight: 1 }}>×</button>
+          </div>
+        </div>`;
+      }
+
+      // ── 保存できない環境向けの脱出導線（URLコピー）──
+      function StorageWarning() {
+        const [copied, setCopied] = useState(false);
+        return html`<div style=${{ ...card, border: `1px solid ${C.red}`, color: C.red, fontSize: 13, lineHeight: 1.7 }}>
+          ⚠️ この端末／ブラウザでは保存ができません（プライベートブラウズ、「サイトデータをブロック」、またはアプリ内の簡易ブラウザの可能性）。<b>通常モードの Safari／Chrome</b> で開き直すと、生年月日も AIキーも記憶されます。
+          <div style=${{ marginTop: 8 }}>
+            <button onClick=${async () => { if (await copyUrl()) { setCopied(true); setTimeout(() => setCopied(false), 2500); } }} style=${{ background: C.red + "22", border: `1px solid ${C.red}`, color: C.red, borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>🔗 このページのURLをコピー</button>
+            ${copied && html`<span style=${{ marginLeft: 8, fontSize: 12 }}>コピー完了。通常ブラウザに貼り付けて開いてください</span>`}
+          </div>
+        </div>`;
+      }
+
+      // サンプル体験用のプロフィール（保存はしない）
+      const SAMPLE_FORM = { name: "サンプル", date: "1990-05-15", time: "12:00", gender: "male", place: "東京", memo: "" };
+
       function App() {
         // 複数プロフィールを保持。選択中があれば初期値として復元（自動入力＆自動鑑定）。
         const [store, setStore] = useState(loadStore);
@@ -609,6 +732,8 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         const [collapsed, setCollapsed] = useState(() => !!initial); // 保存復元時は入力を畳んで結果を見せる
         const [settings, setSettings] = useState(loadSettings);
         const [theme, setTheme] = useState(loadTheme);
+        const [visit] = useState(touchVisit); // 来訪を1日1回記録しストリークを得る
+        const [sampleMode, setSampleMode] = useState(false);
 
         const persist = (next) => { setStore(next); saveStore(next); };
         const onSaveKey = (k) => { saveKey(k); setApiKey(k); };
@@ -625,20 +750,25 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
           const exists = store.profiles.some((p) => p.id === id);
           const profiles = exists ? store.profiles.map((p) => (p.id === id ? entry : p)) : [...store.profiles, entry];
           persist({ profiles, currentId: id });
-          setEditingId(id);
+          setEditingId(id); setSampleMode(false);
           setBirth(buildBirth(form));
           setCollapsed(true); // 鑑定したら入力を畳む
         };
         const selectProfile = (id) => {
           const p = store.profiles.find((x) => x.id === id); if (!p) return;
-          setErr(""); setForm({ ...DEFAULT_FORM, ...p }); setEditingId(id); setBirth(buildBirth(p));
+          setErr(""); setForm({ ...DEFAULT_FORM, ...p }); setEditingId(id); setBirth(buildBirth(p)); setSampleMode(false);
           persist({ ...store, currentId: id });
           setCollapsed(true);
         };
         const startNew = () => {
-          setErr(""); setForm({ ...DEFAULT_FORM }); setEditingId(null); setBirth(null);
+          setErr(""); setForm({ ...DEFAULT_FORM }); setEditingId(null); setBirth(null); setSampleMode(false);
           persist({ ...store, currentId: null });
           setCollapsed(false); // 新規入力のため開く
+        };
+        // サンプル体験：保存せずに結果を表示（初回離脱を防ぐ）
+        const viewSample = () => {
+          setErr(""); setSampleMode(true); setEditingId(null);
+          setForm({ ...SAMPLE_FORM }); setBirth(buildBirth(SAMPLE_FORM)); setCollapsed(true);
         };
         const deleteProfile = (id) => {
           const profiles = store.profiles.filter((p) => p.id !== id);
@@ -666,9 +796,9 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             <div style=${{ fontSize: 12, color: C.faint }}>算命学・四柱推命・西洋＆インド占星術 — 生年月日からの自前計算</div>
           </div>
 
-          ${!STORAGE_OK && html`<div style=${{ ...card, border: `1px solid ${C.red}`, color: C.red, fontSize: 13, lineHeight: 1.7 }}>
-            ⚠️ この端末／ブラウザでは保存ができません（プライベートブラウズ、「サイトデータをブロック」、またはアプリ内の簡易ブラウザの可能性）。通常モードのブラウザ（Safari／Chrome）で開き直すと、生年月日が保存されます。
-          </div>`}
+          ${!STORAGE_OK && html`<${StorageWarning} />`}
+          ${STORAGE_OK && html`<${InstallTip} />`}
+          ${!birth && store.profiles.length === 0 && html`<${Onboarding} onSample=${viewSample} />`}
 
           <div style=${card}>
             <div onClick=${() => setCollapsed(!collapsed)} style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", marginBottom: collapsed ? 0 : 12 }}>
@@ -723,7 +853,11 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
 
           ${data && data.error && html`<div style=${{ ...card, color: C.red }}>計算エラー：${data.error}</div>`}
           ${data && !data.error && html`<div>
-            ${birth.name && html`<div style=${{ fontSize: 13, color: C.sub, marginBottom: 10 }}>${birth.name} さんの命式</div>`}
+            ${sampleMode && html`<div style=${{ background: C.purple + "1A", border: `1px solid ${C.purple}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12, fontSize: 13, color: C.text, lineHeight: 1.6 }}>
+              👀 これは<b>サンプル表示</b>です。<button onClick=${startNew} style=${{ background: C.purple, color: C.onAccent, border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginLeft: 4 }}>自分の生年月日で見る</button>
+            </div>`}
+            ${data.un && html`<${TodayHero} un=${data.un} visit=${visit} name=${sampleMode ? "" : birth.name} />`}
+            ${birth.name && !sampleMode && html`<div style=${{ fontSize: 13, color: C.sub, marginBottom: 10 }}>${birth.name} さんの命式</div>`}
             ${!birth.timeKnown && html`<div style=${{ fontSize: 12, color: C.accent, background: C.accent + "14", border: `1px solid ${C.accent}55`, borderRadius: 8, padding: "7px 10px", marginBottom: 10, lineHeight: 1.6 }}>
               出生時刻が未入力のため <b>12:00</b> として計算しています。時柱・ASC（上昇宮）は概算です。
             </div>`}
