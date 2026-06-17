@@ -74,6 +74,10 @@
         return { profiles: [], currentId: null };
       };
       const saveStore = (s) => { try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch {} };
+      // この端末/ブラウザで localStorage が実際に使えるか（プライベートブラウズ等の検出）
+      const STORAGE_OK = (() => {
+        try { const k = "__meishiki_test"; localStorage.setItem(k, "1"); const v = localStorage.getItem(k); localStorage.removeItem(k); return v === "1"; } catch { return false; }
+      })();
       // フォーム入力から鑑定用の birth オブジェクトを組み立てる（出生地→緯度経度を解決）。
       const buildBirth = (f) => {
         if (!f || !f.date) return null;
@@ -543,6 +547,10 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             <div style=${{ fontSize: 22, fontWeight: 800, letterSpacing: 1 }}>命式ノート</div>
             <div style=${{ fontSize: 12, color: C.faint }}>算命学・四柱推命・西洋＆インド占星術 — 生年月日からの自前計算</div>
           </div>
+
+          ${!STORAGE_OK && html`<div style=${{ ...card, border: `1px solid ${C.red}`, color: C.red, fontSize: 13, lineHeight: 1.7 }}>
+            ⚠️ この端末／ブラウザでは保存ができません（プライベートブラウズ、「サイトデータをブロック」、またはアプリ内の簡易ブラウザの可能性）。通常モードのブラウザ（Safari／Chrome）で開き直すと、生年月日が保存されます。
+          </div>`}
 
           <div style=${card}>
             <div onClick=${() => setCollapsed(!collapsed)} style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", marginBottom: collapsed ? 0 : 12 }}>
