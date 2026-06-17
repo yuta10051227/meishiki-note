@@ -242,7 +242,7 @@
 
       // ── カスタマイズ設定（端末内に保存）──
       const SETTINGS_STORE = "meishiki-note:settings:v1";
-      const DEFAULT_SECTIONS = { natal: true, wforecast: true, advisor: true, chat: true, calendar: true, jintai: true, un: true, unsei: true, aishou: true, astro: true };
+      const DEFAULT_SECTIONS = { natal: true, wforecast: true, love: true, advisor: true, chat: true, calendar: true, jintai: true, un: true, unsei: true, aishou: true, astro: true };
       const DEFAULT_SETTINGS = { tone: "gentle", oracleName: "", replyLength: "normal", dailyOracle: true, sections: { ...DEFAULT_SECTIONS } };
       const loadSettings = () => {
         try {
@@ -576,6 +576,36 @@
         "革新と自由の発明家。独自の視点で“当たり前”を更新し、仲間や未来のために動く人。個性とネットワークが武器。冷静さに人間味を添えると理想がより広がります。",
         "共感と想像の芸術家。境界をやわらかく越えて人に寄り添い、夢や癒しを形にする人。感受性と優しさが宝。自分の軸を持つほど、才能が現実で花開きます。",
       ];
+      // 金星（愛し方・好みのタイプ・何に惹かれるか）。恋愛・異性への関心の中心。
+      const VENUS_LOVE = [
+        "ストレートで情熱的な愛し方。追いかけるドキドキが好きで、自分から動く恋に燃える。駆け引きより素直さが魅力。",
+        "五感で愛を感じるタイプ。安心・心地よさ・スキンシップを大切に、ゆっくり深まる恋を好む。一途で甘え上手。",
+        "会話とノリで惹かれる。一緒にいて楽しい・話が弾む相手が好き。軽やかでフレンドリー、束縛は苦手。",
+        "情を注ぐ愛し方。守り守られる安心感を求め、家庭的でケア上手。心を開いた相手にはとことん尽くす。",
+        "ドラマチックで一途。特別扱いと褒め言葉が嬉しく、堂々と愛を表現。プライドを大切にされると輝く。",
+        "さりげない気遣いで愛を示す。誠実で控えめ、尽くすことで愛情表現。理想は高めだが深い信頼を育む。",
+        "恋愛上手でロマンチック。美しさ・対等さ・心地よい関係を重視。一緒に楽しむデートと品の良さに惹かれる。",
+        "深く一途に愛する。中途半端を嫌い本気で全身全霊。強い結びつきと信頼を求め、嫉妬も情熱の裏返し。",
+        "自由で明るい恋。一緒に冒険・成長できる相手が好き。束縛より笑い合える対等な関係を求める。",
+        "堅実で誠実な愛し方。軽い恋より長く続く本気の関係を重視。不器用でも責任感と一途さが魅力。",
+        "友達のような恋人関係を好む。自由と個性を尊重し合える相手に惹かれる。独特の感性と程よい距離感が心地よい。",
+        "ロマンチックで献身的。共感と一体感を求め、相手に深く寄り添う。優しさは宝だが尽くしすぎには注意。",
+      ];
+      // 火星（情熱・アプローチ・恋の動き方）。
+      const MARS_LOVE = [
+        "好きになったら即アタック。スピード勝負で押しが強い。情熱的だが熱しやすく、勢いが武器。",
+        "じっくり距離を縮める。安定志向で一度本気になると粘り強い。マイペースだが愛は長続き。",
+        "言葉とユーモアで惹きつける。フットワーク軽く、会話で盛り上げるのが得意。",
+        "情に訴え、守る形でアプローチ。慎重で傷つきやすいが、安心できると一気に深まる。",
+        "堂々とアピールしロマンチックに演出。主役級の情熱で、注目と承認が原動力。",
+        "さりげない気配りで攻める。慎重で奥手だが、誠実な積み重ねで信頼を勝ち取る。",
+        "スマートでソフトな駆け引き。雰囲気づくりが上手く、対等で心地よい関係を演出。",
+        "一点集中で深く迫る。情熱的で独占欲が強く、本気の相手にはとことん。秘めた熱量が魅力。",
+        "オープンで楽しいアプローチ。自由な空気で惹きつけ、追う恋を楽しむ。",
+        "本気だからこそ慎重。時間をかけて確実に。不器用だが責任を持って関係を築く。",
+        "友達から自然に発展。独自のペースで、束縛しない距離感でアプローチ。",
+        "ムードと優しさで包む。受け身がちでロマンチック、相手に合わせる柔らかな攻め方。",
+      ];
       const ELEM_COLOR = { 火: "#E2554B", 地: "#C9A227", 風: "#5B8DEF", 水: "#3FB984" };
       const ASPECTS_DEF = [
         { name: "コンジャンクション", glyph: "☌", angle: 0, orb: 8, nature: "強調", col: C.accent },
@@ -749,6 +779,126 @@
         </div>`;
       }
 
+      // ── 西洋占星術の相性（シナストリー）：2人の出生図を重ねて読む ──
+      const ELEM_PAIR = (a, b) => {
+        if (a === b) return 5;
+        const fa = (x) => x === "火" || x === "風", ew = (x) => x === "地" || x === "水";
+        if ((fa(a) && fa(b)) || (ew(a) && ew(b))) return 4;
+        return 2;
+      };
+      const KEYPAIRS = [
+        ["金星", "火星", "💘 金星 × 火星（恋愛の引力）", "ときめきと情熱が自然に通い合う、恋愛運の強い組み合わせ。", "惹かれ合うけれど刺激も強め。ペースの違いを尊重すると長続き。"],
+        ["太陽", "月", "🌞🌙 太陽 × 月（安心と一体感）", "素の相手を受け止め合える、安心できる相性。", "価値観と感情のリズムが違う二人。歩み寄りが鍵。"],
+        ["太陽", "太陽", "☀ 太陽 × 太陽（人生の方向）", "人生の向きが響き合い、一緒に伸びていける。", "自我がぶつかりやすいが、互いを成長させる関係。"],
+        ["月", "月", "🌙 月 × 月（感情のテンポ）", "感情のテンポが合い、一緒にいて落ち着く。", "安心の条件が違う。気持ちを言葉にして共有を。"],
+        ["水星", "水星", "💬 水星 × 水星（会話）", "会話と考え方が噛み合い、話していて楽しい。", "話のかみ合わせに差。聞き方を工夫すると好転。"],
+      ];
+      const buildSynastry = (a, b) => {
+        if (!a || !b) return null;
+        const sIdx = (lon) => Math.floor((((lon % 360) + 360) % 360) / 30);
+        const order = ["太陽", "月", "水星", "金星", "火星"];
+        let har = 0, ten = 0;
+        for (const pa of order) for (const pb of order) {
+          if (a[pa] == null || b[pb] == null) continue;
+          const d = angDiff(a[pa], b[pb]);
+          for (const asp of ASPECTS_DEF) {
+            if (Math.abs(d - asp.angle) <= asp.orb) {
+              if (asp.nature === "調和" || asp.nature === "強調") har++;
+              else if (asp.nature === "緊張" || asp.nature === "対立") ten++;
+              break;
+            }
+          }
+        }
+        const highlights = KEYPAIRS.map(([p1, p2, title, good, chall]) => {
+          const cand = [];
+          const tryPair = (x, y) => { if (a[x] == null || b[y] == null) return; const d = angDiff(a[x], b[y]); for (const asp of ASPECTS_DEF) { if (Math.abs(d - asp.angle) <= asp.orb) { cand.push(asp); break; } } };
+          tryPair(p1, p2); if (p1 !== p2) tryPair(p2, p1);
+          if (!cand.length) return null;
+          const asp = cand[0], harmo = asp.nature === "調和" || asp.nature === "強調";
+          return { title, asp, harmo, text: harmo ? good : chall };
+        }).filter(Boolean);
+        const aSun = sIdx(a.太陽), bSun = sIdx(b.太陽);
+        const sunComp = ELEM_PAIR(SIGN_INFO[aSun][2], SIGN_INFO[bSun][2]);
+        let score = 50 + har * 5 - ten * 3 + (sunComp - 3) * 4;
+        score = Math.max(20, Math.min(98, Math.round(score)));
+        const label = score >= 80 ? "とても良い相性" : score >= 60 ? "良い相性" : score >= 40 ? "努力で深まる相性" : "刺激的な相性";
+        return { score, label, har, ten, highlights, aSun, bSun, aMoon: sIdx(a.月), bMoon: sIdx(b.月), aVenus: sIdx(a.金星), bVenus: sIdx(b.金星), sunComp };
+      };
+
+      function Synastry({ chart }) {
+        const [b, setB] = useState({ date: "", time: "", name: "" });
+        const [res, setRes] = useState(null);
+        const [err, setErr] = useState("");
+        const run = () => {
+          setErr("");
+          if (!b.date) { setErr("相手の生年月日を入れてください"); return; }
+          try {
+            const pc = computeChart({ date: b.date, time: b.time || "12:00", lat: 35.68, lon: 139.69, utcOffset: 9 });
+            const syn = buildSynastry(chart.lons, pc.lons);
+            if (!syn) { setErr("計算できませんでした"); return; }
+            setRes(syn);
+          } catch (e) { setErr(String(e.message || e)); }
+        };
+        const barCol = res ? (res.score >= 80 ? C.green : res.score >= 60 ? C.accent : res.score >= 40 ? C.blue : C.red) : C.line;
+        const sg = (i) => `${SIGN_INFO[i][1]} ${SIGN_INFO[i][0]}座`;
+        return html`<div>
+          <div style=${{ fontSize: 12, color: C.faint, marginBottom: 8, lineHeight: 1.6 }}>相手（恋人・気になる人・友人など）の生年月日を入れると、あなたの出生図と重ねた西洋占星術の相性が出ます。時刻は分かれば。</div>
+          <input placeholder="相手の名前（任意）" value=${b.name} onInput=${(e) => setB({ ...b, name: e.target.value })} style=${inp} />
+          <input type="date" value=${b.date} onInput=${(e) => setB({ ...b, date: e.target.value })} style=${inp} />
+          <input type="time" value=${b.time} onInput=${(e) => setB({ ...b, time: e.target.value })} style=${inp} />
+          <button onClick=${run} style=${{ ...inp, background: C.purple, color: C.onAccent, fontWeight: 700, border: "none", cursor: "pointer" }}>相性を見る</button>
+          ${err && html`<div style=${{ fontSize: 13, color: C.red }}>${err}</div>`}
+          ${res && html`<div style=${{ marginTop: 6 }}>
+            <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+              <span style=${{ fontSize: 15, fontWeight: 700 }}>${res.label}</span>
+              <span style=${{ fontSize: 20, fontWeight: 800, color: barCol }}>${res.score}点</span>
+            </div>
+            <div style=${{ height: 8, background: C.panel2, borderRadius: 5, overflow: "hidden", border: `1px solid ${C.line}`, marginBottom: 10 }}>
+              <div style=${{ width: `${res.score}%`, height: "100%", background: barCol }}></div>
+            </div>
+            <div style=${{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, color: C.sub, marginBottom: 10 }}>
+              <div>☀ 太陽：あなた <b style=${{ color: C.text }}>${sg(res.aSun)}</b> × 相手 <b style=${{ color: C.text }}>${sg(res.bSun)}</b>（${res.sunComp >= 5 ? "同じ気質で安心" : res.sunComp >= 4 ? "気質が響き合う" : "違う気質で刺激的"}）</div>
+              <div>🌙 月：あなた <b style=${{ color: C.text }}>${sg(res.aMoon)}</b> × 相手 <b style=${{ color: C.text }}>${sg(res.bMoon)}</b></div>
+              <div>♀ 金星：あなた <b style=${{ color: C.text }}>${sg(res.aVenus)}</b> × 相手 <b style=${{ color: C.text }}>${sg(res.bVenus)}</b></div>
+            </div>
+            ${res.highlights.length > 0 && html`<div style=${{ display: "flex", flexDirection: "column", gap: 7 }}>
+              ${res.highlights.map((h, i) => html`<div key=${i} style=${{ background: C.panel2, border: `1px solid ${h.harmo ? C.green : C.red}`, borderRadius: 10, padding: "9px 11px" }}>
+                <div style=${{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>${h.title} <span style=${{ color: h.asp.col, fontWeight: 700 }}>${h.asp.glyph} ${h.asp.name}</span></div>
+                <div style=${{ fontSize: 13, lineHeight: 1.6, color: C.sub }}>${h.text}</div>
+              </div>`)}
+            </div>`}
+            <div style=${{ fontSize: 12, color: C.faint, marginTop: 8, lineHeight: 1.6 }}>調和の角度 ${res.har} ・ 緊張の角度 ${res.ten}（2人の太陽・月・水星・金星・火星の角度から算出）。占いとして楽しんで。</div>
+          </div>`}
+        </div>`;
+      }
+
+      // ── 恋愛・異性への関心（自分の出生図：金星・火星・月・DSC）──
+      function Love({ chart }) {
+        const [open, setOpen] = useState(false);
+        if (!chart || !chart.lons || chart.ascDeg == null) return html`<div style=${{ fontSize: 13, color: C.faint }}>計算できませんでした。</div>`;
+        const sIdx = (lon) => Math.floor((((lon % 360) + 360) % 360) / 30);
+        const v = sIdx(chart.lons.金星), m = sIdx(chart.lons.火星), mo = sIdx(chart.lons.月);
+        const ascSign = sIdx(chart.ascDeg), dsc = (ascSign + 6) % 12;
+        const sg = (i) => `${SIGN_INFO[i][1]} ${SIGN_INFO[i][0]}座`;
+        const col = (i) => ELEM_COLOR[SIGN_INFO[i][2]];
+        const card2 = (c, head, body) => html`<div style=${{ background: C.panel2, border: `1px solid ${c}`, borderRadius: 12, padding: 13, marginBottom: 10 }}>
+          <div style=${{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>${head}</div>
+          <div style=${{ fontSize: 13, lineHeight: 1.8, color: C.sub }}>${body}</div>
+        </div>`;
+        return html`<div>
+          <div style=${{ fontSize: 12, color: C.faint, marginBottom: 10, lineHeight: 1.6 }}>あなたの出生図から、恋愛のしかた・惹かれるタイプ・アプローチの傾向を読み解きます。</div>
+          ${card2(col(v), html`♀ 金星 <span style=${{ color: col(v) }}>${sg(v)}</span>：愛し方・好みのタイプ`, VENUS_LOVE[v])}
+          ${card2(col(m), html`♂ 火星 <span style=${{ color: col(m) }}>${sg(m)}</span>：情熱・アプローチ`, MARS_LOVE[m])}
+          ${card2(col(mo), html`☽ 月 <span style=${{ color: col(mo) }}>${sg(mo)}</span>：恋人に求める安心`, html`心が満たされる関係のテーマは「${SIGN_INFO[mo][3]}」。${SIGN_INFO[mo][4]}`)}
+          ${card2(C.purple, html`⬇ DSC（下降点）<span style=${{ color: C.purple }}>${sg(dsc)}</span>：惹かれる相手の傾向`, html`あなたが自然と惹かれやすいのは、<b style=${{ color: C.text }}>${SIGN_INFO[dsc][0]}座的な「${SIGN_INFO[dsc][3]}」</b>を持つ人。${SIGN_INFO[dsc][4]}`)}
+          <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "6px 0", borderTop: `1px solid ${C.line}`, marginTop: 4 }} onClick=${() => setOpen(!open)}>
+            <span style=${{ fontSize: 13, fontWeight: 700, color: C.green }}>💞 気になる人との相性も見る（おまけ）</span>
+            <span style=${{ fontSize: 12, color: C.sub }}>${open ? "閉じる ▲" : "開く ▼"}</span>
+          </div>
+          ${open && html`<div style=${{ marginTop: 8 }}><${Synastry} chart=${chart} /></div>`}
+        </div>`;
+      }
+
       // ── 相性（2人目） ──
       function Aishou({ birth }) {
         const [b, setB] = useState({ date: "", time: "", gender: "" });
@@ -914,7 +1064,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         const set = (patch) => onChange({ ...settings, ...patch });
         const setSection = (k, v) => onChange({ ...settings, sections: { ...settings.sections, [k]: v } });
         const lbl = { fontSize: 12, color: C.sub, display: "block", margin: "0 0 2px" };
-        const SEC = [["natal", "ネイタルチャート(西洋占星術)"], ["wforecast", "西洋占星術の運勢(日/月/年/運命)"], ["advisor", "専属占術師アドバイス"], ["chat", "AI相談"], ["calendar", "占術カレンダー"], ["jintai", "人体星図"], ["un", "今日・今月・今年の運氣(算命学)"], ["unsei", "天中殺・大運"], ["aishou", "相性"], ["astro", "インド占星術ほか"]];
+        const SEC = [["natal", "ネイタルチャート(西洋占星術)"], ["wforecast", "西洋占星術の運勢(日/月/年/運命)"], ["love", "恋愛・異性への関心"], ["advisor", "専属占術師アドバイス"], ["chat", "AI相談"], ["calendar", "占術カレンダー"], ["jintai", "人体星図"], ["un", "今日・今月・今年の運氣(算命学)"], ["unsei", "天中殺・大運"], ["aishou", "相性"], ["astro", "インド占星術ほか"]];
         return html`<div style=${card}>
           <div onClick=${() => setOpen(!open)} style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
             <span style=${{ fontSize: 14, fontWeight: 700, color: C.text }}>⚙️ 設定・カスタマイズ</span>
@@ -1244,6 +1394,9 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             <//>`}
             ${sec.wforecast !== false && data.chart && data.transit && html`<${Section} title="西洋占星術の運勢（今日・今月・今年・運命）" color=${C.green} sub="運行中の天体をあなたの出生図に重ねた、日・月・年・運命の流れ。">
               <${AstroForecast} natal=${data.chart} transit=${data.transit} birth=${birth} />
+            <//>`}
+            ${sec.love !== false && data.chart && html`<${Section} title="恋愛・異性への関心（西洋占星術）" color=${C.red} sub="金星・火星・月・DSCから、あなたの恋愛傾向と惹かれるタイプを読み解きます。">
+              <${Love} chart=${data.chart} />
             <//>`}
             ${sec.advisor && data.advisor && html`<${Section} title="専属占術師アドバイス" color=${C.accent} sub="あなたの命式から、ビジネス・人間関係・健康・今日の指針を読み解きます。">
               <${Advisor} adv=${data.advisor} />
