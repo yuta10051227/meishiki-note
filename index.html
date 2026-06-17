@@ -35,11 +35,37 @@
 
       const html = htm.bind(React.createElement);
 
-      const C = {
-        bg: "#0F1115", panel: "#171A21", panel2: "#1E222B", line: "#2A2F3A",
-        text: "#E8EAED", sub: "#9AA1AC", faint: "#7A828E",
-        purple: "#9B8CFF", green: "#3FB984", blue: "#5B8DEF", accent: "#C9A227", red: "#E2554B",
+      // 配色テーマ（ダーク/ライト）。onAccent = 色付きボタン上の文字色。
+      const THEMES = {
+        dark: {
+          bg: "#0F1115", panel: "#171A21", panel2: "#1E222B", line: "#2A2F3A",
+          text: "#E8EAED", sub: "#9AA1AC", faint: "#7A828E",
+          purple: "#9B8CFF", green: "#3FB984", blue: "#5B8DEF", accent: "#C9A227", red: "#E2554B",
+          onAccent: "#0B0D11",
+        },
+        light: {
+          bg: "#F4F6F9", panel: "#FFFFFF", panel2: "#EEF1F5", line: "#D7DCE3",
+          text: "#1B1F26", sub: "#566072", faint: "#8A94A3",
+          purple: "#6C5CE7", green: "#1E9E6A", blue: "#2F6FE0", accent: "#B8860B", red: "#D23B30",
+          onAccent: "#FFFFFF",
+        },
       };
+      const THEME_STORE = "meishiki-note:theme";
+      const loadTheme = () => { try { return localStorage.getItem(THEME_STORE) === "light" ? "light" : "dark"; } catch { return "dark"; } };
+      // C / inp / card は let（ライブバインディング）。テーマ変更時に作り直して全体に反映。
+      let C = THEMES[loadTheme()] || THEMES.dark;
+      let inp, card;
+      const rebuildStyles = () => {
+        inp = { width: "100%", padding: "11px 12px", marginBottom: 10, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, color: C.text, fontSize: 15 };
+        card = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16, marginBottom: 14 };
+      };
+      const applyBodyTheme = () => { try { document.body.style.background = C.bg; document.body.style.color = C.text; } catch {} };
+      const applyTheme = (mode) => {
+        C = THEMES[mode] || THEMES.dark;
+        rebuildStyles(); applyBodyTheme();
+        try { localStorage.setItem(THEME_STORE, mode); } catch {}
+      };
+      rebuildStyles(); applyBodyTheme();
 
       // 出生地（47都道府県の県庁所在地・緯度経度）。真太陽時の地方時補正に使用。
       const PLACES = [
@@ -178,9 +204,6 @@
         return text;
       }
 
-      const inp = { width: "100%", padding: "11px 12px", marginBottom: 10, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, color: C.text, fontSize: 15 };
-      const card = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16, marginBottom: 14 };
-
       function Section({ title, color, children, sub }) {
         return html`<div style=${card}>
           <div style=${{ fontSize: 15, fontWeight: 700, color: color || C.text, marginBottom: sub ? 2 : 10 }}>${title}</div>
@@ -314,7 +337,7 @@
               <option value="">性別未設定</option><option value="male">男性</option><option value="female">女性</option>
             </select>
           </div>
-          <button onClick=${run} style=${{ ...inp, background: C.purple, color: "#0B0D11", fontWeight: 700, border: "none", cursor: "pointer" }}>相性を見る</button>
+          <button onClick=${run} style=${{ ...inp, background: C.purple, color: C.onAccent, fontWeight: 700, border: "none", cursor: "pointer" }}>相性を見る</button>
           ${err && html`<div style=${{ fontSize: 13, color: C.red }}>${err}</div>`}
           ${res && html`<div style=${{ marginTop: 6 }}>
             <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
@@ -410,7 +433,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               ⚠️ キーは<b>この端末（ブラウザ）にのみ</b>保存されます。相談を送ると、<b>命式と相談内容が Gemini（Google）に送信</b>されます（占いの計算自体は従来どおり端末内で完結）。Google AI Studio の<b>無料枠</b>で使えます（上限は Google の規定に従います）。
             </div>
             <input type="password" placeholder="AIza..." value=${draft} onInput=${(e) => setDraft(e.target.value)} style=${inp} />
-            <button onClick=${() => { if (draft.trim()) onSaveKey(draft.trim()); }} style=${{ ...inp, marginBottom: 0, background: C.green, color: "#0B0D11", fontWeight: 700, border: "none", cursor: "pointer" }}>キーを保存して相談を始める</button>
+            <button onClick=${() => { if (draft.trim()) onSaveKey(draft.trim()); }} style=${{ ...inp, marginBottom: 0, background: C.green, color: C.onAccent, fontWeight: 700, border: "none", cursor: "pointer" }}>キーを保存して相談を始める</button>
           </div>`;
         }
 
@@ -441,13 +464,13 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
 
           <div style=${{ display: "flex", gap: 8 }}>
             <input placeholder="相談したいことを入力…" value=${input} onInput=${(e) => setInput(e.target.value)} onKeyDown=${(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} style=${{ ...inp, marginBottom: 0, flex: 1 }} />
-            <button onClick=${() => send()} disabled=${busy || !input.trim()} style=${{ ...inp, marginBottom: 0, width: 92, background: busy || !input.trim() ? C.line : C.purple, color: "#0B0D11", fontWeight: 700, border: "none", cursor: busy || !input.trim() ? "default" : "pointer" }}>送る</button>
+            <button onClick=${() => send()} disabled=${busy || !input.trim()} style=${{ ...inp, marginBottom: 0, width: 92, background: busy || !input.trim() ? C.line : C.purple, color: C.onAccent, fontWeight: 700, border: "none", cursor: busy || !input.trim() ? "default" : "pointer" }}>送る</button>
           </div>
         </div>`;
       }
 
       // ── 設定・カスタマイズ パネル ──
-      function Settings({ settings, onChange }) {
+      function Settings({ settings, onChange, theme, onToggleTheme }) {
         const [open, setOpen] = useState(false);
         const set = (patch) => onChange({ ...settings, ...patch });
         const setSection = (k, v) => onChange({ ...settings, sections: { ...settings.sections, [k]: v } });
@@ -459,6 +482,13 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             <span style=${{ fontSize: 12, color: C.sub }}>${open ? "閉じる ▲" : "開く ▼"}</span>
           </div>
           ${open && html`<div style=${{ marginTop: 12 }}>
+            <label style=${lbl}>テーマ</label>
+            <div style=${{ display: "flex", gap: 8, marginBottom: 10 }}>
+              ${[["dark", "🌙 ダーク"], ["light", "☀️ ライト"]].map(([k, label]) => {
+                const on = theme === k;
+                return html`<button key=${k} onClick=${() => onToggleTheme(k)} style=${{ flex: 1, border: `1px solid ${on ? C.purple : C.line}`, background: on ? C.purple + "22" : C.panel2, color: on ? C.purple : C.text, borderRadius: 10, padding: "9px", fontSize: 14, cursor: "pointer", fontWeight: on ? 700 : 400 }}>${label}</button>`;
+              })}
+            </div>
             <label style=${lbl}>占い師の口調</label>
             <select value=${settings.tone} onChange=${(e) => set({ tone: e.target.value })} style=${inp}>
               ${Object.entries(TONE_LABELS).map(([k, v]) => html`<option key=${k} value=${k}>${v}</option>`)}
@@ -492,11 +522,13 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         const [apiKey, setApiKey] = useState(loadKey);
         const [collapsed, setCollapsed] = useState(() => !!initial); // 保存復元時は入力を畳んで結果を見せる
         const [settings, setSettings] = useState(loadSettings);
+        const [theme, setTheme] = useState(loadTheme);
 
         const persist = (next) => { setStore(next); saveStore(next); };
         const onSaveKey = (k) => { saveKey(k); setApiKey(k); };
         const onClearKey = () => { clearKey(); setApiKey(""); };
         const onChangeSettings = (s) => { setSettings(s); saveSettings(s); };
+        const onToggleTheme = (mode) => { applyTheme(mode); setTheme(mode); };
         const sec = settings.sections;
 
         const submit = () => {
@@ -591,7 +623,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             </div>
             <label style=${{ fontSize: 12, color: C.sub, display: "block", marginBottom: 2 }}>私について（AIに伝える追加メモ・任意）</label>
             <textarea value=${form.memo} onInput=${(e) => setForm({ ...form, memo: e.target.value })} placeholder="例：30代・経営者。最近の悩みは事業の方向性と健康。慎重な性格。" rows=${2} style=${{ ...inp, resize: "vertical", lineHeight: 1.5 }}></textarea>
-            <button onClick=${submit} style=${{ ...inp, marginBottom: 0, width: "100%", background: C.accent, color: "#0B0D11", fontWeight: 700, border: "none", cursor: "pointer", fontSize: 16 }}>${editingId ? "更新して鑑定" : "鑑定して保存"}</button>
+            <button onClick=${submit} style=${{ ...inp, marginBottom: 0, width: "100%", background: C.accent, color: C.onAccent, fontWeight: 700, border: "none", cursor: "pointer", fontSize: 16 }}>${editingId ? "更新して鑑定" : "鑑定して保存"}</button>
             <div style=${{ fontSize: 11, color: C.faint, marginTop: 6 }}>
               ${store.profiles.length > 0
                 ? "上のタブで保存した人を切り替え・削除できます。「＋新規」で別の人を登録。保存は端末内のみ（外部送信なし）。"
@@ -601,7 +633,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             </div>`}
           </div>
 
-          <${Settings} settings=${settings} onChange=${onChangeSettings} />
+          <${Settings} settings=${settings} onChange=${onChangeSettings} theme=${theme} onToggleTheme=${onToggleTheme} />
 
           ${data && data.error && html`<div style=${{ ...card, color: C.red }}>計算エラー：${data.error}</div>`}
           ${data && !data.error && html`<div>
