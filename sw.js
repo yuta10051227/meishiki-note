@@ -4,7 +4,7 @@
    - アプリ本体（同一オリジン）は network-first（更新を常に優先、オフライン時はキャッシュ）。
    - 外部ライブラリ（esm.sh）は cache-first（バージョン固定で不変なため）。
    - Gemini API はキャッシュしない（常にネットワーク）。 */
-const CACHE = "meishiki-note-v1";
+const CACHE = "meishiki-note-v2";
 const SHELL = ["./", "./index.html", "./natal.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {

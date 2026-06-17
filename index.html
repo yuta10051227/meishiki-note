@@ -166,6 +166,48 @@
       };
       const isIOS = () => { try { return /iphone|ipad|ipod/i.test(navigator.userAgent); } catch { return false; } };
 
+      // ── 日々の記録（気分ログ）：データ蓄積でスイッチングコストを生み継続を強める ──
+      const JOURNAL_STORE = "meishiki-note:journal:v1";
+      const loadJournal = () => { try { return JSON.parse(localStorage.getItem(JOURNAL_STORE) || "{}") || {}; } catch { return {}; } };
+      const getEntry = (iso) => loadJournal()[iso] || null;
+      const saveEntry = (iso, entry) => {
+        const j = loadJournal();
+        if (entry && (entry.mood || (entry.note || "").trim())) j[iso] = { mood: entry.mood || 0, note: (entry.note || "").trim() };
+        else delete j[iso];
+        try { localStorage.setItem(JOURNAL_STORE, JSON.stringify(j)); } catch {}
+        return j;
+      };
+      const journalCount = () => Object.keys(loadJournal()).length;
+      const MOODS = [[1, "😣"], [2, "😕"], [3, "😐"], [4, "🙂"], [5, "😄"]];
+      const moodEmoji = (m) => { const f = MOODS.find((x) => x[0] === m); return f ? f[1] : ""; };
+
+      // ── ストリークのマイルストーン（損失回避＋達成感で継続を後押し）──
+      const MILESTONE_STORE = "meishiki-note:milestone:v1";
+      const MILESTONES = [3, 7, 14, 30, 50, 100, 200, 365];
+      const checkMilestone = (streak) => {
+        const reached = MILESTONES.filter((n) => streak >= n).pop() || 0;
+        let last = 0; try { last = parseInt(localStorage.getItem(MILESTONE_STORE) || "0", 10) || 0; } catch {}
+        if (reached > last) { try { localStorage.setItem(MILESTONE_STORE, String(reached)); } catch {} return reached; }
+        return 0;
+      };
+
+      // ── 今日のラッキー（五行ベースの日替わりコンテンツ：新鮮さ＝戻る理由）──
+      const STEM_ELEM = { 甲: "木", 乙: "木", 丙: "火", 丁: "火", 戊: "土", 己: "土", 庚: "金", 辛: "金", 壬: "水", 癸: "水" };
+      const LUCKY_BY_ELEM = {
+        木: { color: "緑", hex: "#36B37E", dir: "東", action: "新しいことを始める・企画する" },
+        火: { color: "赤・オレンジ", hex: "#E2554B", dir: "南", action: "発信する・人と会う・表現する" },
+        土: { color: "黄・ベージュ", hex: "#C9A227", dir: "南西", action: "整理する・信頼を積む・基盤づくり" },
+        金: { color: "白・金", hex: "#C9CDD6", dir: "西", action: "決断する・仕上げる・手放す" },
+        水: { color: "青・黒", hex: "#5B8DEF", dir: "北", action: "学ぶ・情報収集・休んで充電" },
+      };
+      const BRANCH_TIME = { 子: "23〜1時", 丑: "1〜3時", 寅: "3〜5時", 卯: "5〜7時", 辰: "7〜9時", 巳: "9〜11時", 午: "11〜13時", 未: "13〜15時", 申: "15〜17時", 酉: "17〜19時", 戌: "19〜21時", 亥: "21〜23時" };
+      const luckyOf = (un) => {
+        if (!un || !un.day) return null;
+        const elem = STEM_ELEM[un.day.stem] || "土";
+        const branch = String(un.day.ganzhi || "").slice(-1);
+        return { ...LUCKY_BY_ELEM[elem], elem, time: BRANCH_TIME[branch] || "—" };
+      };
+
       // ── カスタマイズ設定（端末内に保存）──
       const SETTINGS_STORE = "meishiki-note:settings:v1";
       const DEFAULT_SECTIONS = { advisor: true, chat: true, calendar: true, jintai: true, un: true, unsei: true, aishou: true, astro: true };
@@ -266,7 +308,7 @@
       const pad2 = (n) => String(n).padStart(2, "0");
       const stanceColor = (st) => st === "攻め" ? C.green : st === "労い" ? C.blue : st === "守り" ? C.red : C.accent;
       const stanceEmoji = (st) => st === "攻め" ? "🚀" : st === "労い" ? "🌿" : st === "守り" ? "🛡" : "⚖️";
-      function Calendar({ birth, ten }) {
+      function Calendar({ birth, ten, onJournalSave }) {
         const now = new Date();
         const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() });
         const [selDay, setSelDay] = useState(now.getDate());
@@ -313,6 +355,8 @@
               const isToday = isoOf(d) === todayISO;
               const isSel = d === selDay;
               const isTen = info && tenBranches.includes(info.branch);
+              const entry = getEntry(isoOf(d));
+              const mark = entry ? (entry.mood ? moodEmoji(entry.mood) : "📝") : "";
               return html`<button key=${d} onClick=${() => setSelDay(d)} style=${{
                 position: "relative", aspectRatio: "1 / 1", display: "flex", flexDirection: "column",
                 alignItems: "center", justifyContent: "center", gap: 1, cursor: "pointer",
@@ -324,6 +368,7 @@
                 ${info && html`<span style=${{ fontSize: 9, color: C.faint }}>${info.ganZhi}</span>`}
                 ${info && html`<span style=${{ fontSize: 11 }}>${stanceEmoji(info.stance)}</span>`}
                 ${isTen && html`<span style=${{ position: "absolute", top: 1, right: 3, fontSize: 8, color: C.red, fontWeight: 700 }}>天</span>`}
+                ${mark && html`<span style=${{ position: "absolute", bottom: 0, left: 3, fontSize: 10 }}>${mark}</span>`}
               </button>`;
             })}
           </div>
@@ -339,6 +384,9 @@
             <div style=${{ fontSize: 12, color: C.sub, marginBottom: 4 }}>${selInfo.relation}</div>
             <div style=${{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>${selInfo.focus}</div>
             ${selTen && html`<div style=${{ fontSize: 12, color: C.red, marginTop: 6, lineHeight: 1.6 }}>⚠️ 天中殺日：新規拡大より、整理・内省・充電が吉。大きな決断や契約は避けて。</div>`}
+            <div style=${{ borderTop: `1px solid ${C.line}`, margin: "10px 0 8px" }}></div>
+            <div style=${{ fontSize: 12, fontWeight: 700, color: C.green, marginBottom: 6 }}>📔 この日の記録</div>
+            <${MoodPicker} key=${isoOf(selDay)} dateISO=${isoOf(selDay)} onSaved=${onJournalSave} />
           </div>`}
         </div>`;
       }
@@ -645,27 +693,56 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         </div>`;
       }
 
+      // ── 気分ログ入力（今日／カレンダー選択日で共用）──
+      function MoodPicker({ dateISO, onSaved, placeholder }) {
+        const existing = getEntry(dateISO);
+        const [mood, setMood] = useState(existing ? existing.mood : 0);
+        const [note, setNote] = useState(existing ? existing.note || "" : "");
+        const [saved, setSaved] = useState(false);
+        const save = (m, n) => { saveEntry(dateISO, { mood: m, note: n }); setSaved(true); setTimeout(() => setSaved(false), 1600); if (onSaved) onSaved(); };
+        return html`<div>
+          <div style=${{ display: "flex", gap: 6, marginBottom: 8 }}>
+            ${MOODS.map(([m, e]) => {
+              const on = mood === m;
+              return html`<button key=${m} onClick=${() => { setMood(m); save(m, note); }} style=${{ flex: 1, fontSize: 22, padding: "6px 0", borderRadius: 10, cursor: "pointer", border: `1px solid ${on ? C.purple : C.line}`, background: on ? C.purple + "22" : C.panel2, opacity: !mood || on ? 1 : 0.55 }}>${e}</button>`;
+            })}
+          </div>
+          <input value=${note} onInput=${(e) => setNote(e.target.value)} onBlur=${() => { if (mood || note.trim()) save(mood, note); }} placeholder=${placeholder || "ひとこと（任意）：今日の出来事・気分"} style=${{ ...inp, marginBottom: 0 }} />
+          ${saved && html`<div style=${{ fontSize: 12, color: C.green, marginTop: 6 }}>記録しました ✓</div>`}
+        </div>`;
+      }
+
       // ── 今日のヒーロー（毎日開く動機・最上部に常設）──
       const WD_JP = ["日", "月", "火", "水", "木", "金", "土"];
-      function TodayHero({ un, visit, name }) {
+      function TodayHero({ un, visit, name, celebrate }) {
         const d = un.day;
         const col = stanceColor(d.stance);
+        const lucky = luckyOf(un);
         const [msg, setMsg] = useState("");
         const now = new Date();
         const dateLabel = `${now.getMonth() + 1}月${now.getDate()}日(${WD_JP[now.getDay()]})`;
         const onShare = async () => {
-          const text = `【命式ノート】${dateLabel}の運氣：${d.star}・${d.stance}\n${d.move}`;
+          const luckyLine = lucky ? `\nラッキー：${lucky.color}／${lucky.dir}の方角` : "";
+          const text = `【命式ノート】${dateLabel}の運氣：${d.star}・${d.stance}\n${d.move}${luckyLine}`;
           const r = await shareApp(text);
           if (r === "copied") { setMsg("リンクをコピーしました"); setTimeout(() => setMsg(""), 2200); }
           else if (r === "fail") { setMsg("共有できませんでした"); setTimeout(() => setMsg(""), 2200); }
         };
+        const chip = (label, val) => html`<div style=${{ background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, padding: "5px 9px", fontSize: 12, color: C.sub, lineHeight: 1.3 }}>${label}<br /><b style=${{ color: C.text, fontSize: 13 }}>${val}</b></div>`;
         return html`<div style=${{ background: `linear-gradient(135deg, ${col}26, ${C.panel})`, border: `1px solid ${col}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
           <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
             <span style=${{ fontSize: 12, color: C.sub }}>🌙 ${dateLabel} の運氣${name ? `・${name} さん` : ""}</span>
-            ${visit && visit.streak > 1 && html`<span style=${{ fontSize: 12, fontWeight: 700, color: C.accent }}>🔥 ${visit.streak}日連続</span>`}
+            ${visit && visit.streak > 1 && html`<span style=${{ fontSize: 12, fontWeight: 700, color: C.accent }}>🔥 ${visit.streak}日連続${visit.best > visit.streak ? `（最高${visit.best}）` : ""}</span>`}
           </div>
+          ${celebrate > 0 && html`<div style=${{ background: C.accent + "22", border: `1px solid ${C.accent}`, borderRadius: 10, padding: "7px 10px", marginBottom: 8, fontSize: 13, fontWeight: 700, color: C.accent, textAlign: "center" }}>🎉 ${celebrate}日連続 達成！この調子で続けましょう</div>`}
           <div style=${{ fontSize: 20, fontWeight: 800, color: col, marginBottom: 4 }}>${d.emoji} ${d.star} ・ ${d.stance}</div>
           <div style=${{ fontSize: 14, lineHeight: 1.7, color: C.text, marginBottom: 10 }}>${d.move}</div>
+          ${lucky && html`<div style=${{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6, marginBottom: 10 }}>
+            <div style=${{ background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, padding: "5px 9px", fontSize: 12, color: C.sub, lineHeight: 1.3 }}>ラッキー色<br /><span style=${{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style=${{ width: 10, height: 10, borderRadius: 3, background: lucky.hex, display: "inline-block" }}></span><b style=${{ color: C.text, fontSize: 13 }}>${lucky.color}</b></span></div>
+            ${chip("方角", lucky.dir)}
+            ${chip("時間帯", lucky.time)}
+            ${chip("吉な行動", lucky.action)}
+          </div>`}
           <div style=${{ display: "flex", alignItems: "center", gap: 10 }}>
             <button onClick=${onShare} style=${{ background: C.panel2, border: `1px solid ${C.line}`, color: C.text, borderRadius: 999, padding: "6px 14px", fontSize: 13, cursor: "pointer" }}>🔗 今日の運氣をシェア</button>
             ${msg && html`<span style=${{ fontSize: 12, color: C.green }}>${msg}</span>`}
@@ -733,6 +810,9 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         const [settings, setSettings] = useState(loadSettings);
         const [theme, setTheme] = useState(loadTheme);
         const [visit] = useState(touchVisit); // 来訪を1日1回記録しストリークを得る
+        const [celebrate] = useState(() => checkMilestone(visit.streak)); // 今回到達した節目（無ければ0）
+        const [jv, setJv] = useState(0); // 記録保存時に再描画させるカウンタ
+        const onJournalSave = () => setJv((v) => v + 1);
         const [sampleMode, setSampleMode] = useState(false);
 
         const persist = (next) => { setStore(next); saveStore(next); };
@@ -856,7 +936,15 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             ${sampleMode && html`<div style=${{ background: C.purple + "1A", border: `1px solid ${C.purple}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12, fontSize: 13, color: C.text, lineHeight: 1.6 }}>
               👀 これは<b>サンプル表示</b>です。<button onClick=${startNew} style=${{ background: C.purple, color: C.onAccent, border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginLeft: 4 }}>自分の生年月日で見る</button>
             </div>`}
-            ${data.un && html`<${TodayHero} un=${data.un} visit=${visit} name=${sampleMode ? "" : birth.name} />`}
+            ${data.un && html`<${TodayHero} un=${data.un} visit=${visit} celebrate=${celebrate} name=${sampleMode ? "" : birth.name} />`}
+            ${!sampleMode && html`<div style=${{ ...card }}>
+              <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+                <span style=${{ fontSize: 15, fontWeight: 700, color: C.green }}>📔 今日の記録</span>
+                <span style=${{ fontSize: 12, color: C.faint }}>${jv >= 0 ? `これまで ${journalCount()}日ぶん` : ""}</span>
+              </div>
+              <div style=${{ fontSize: 12, color: C.faint, marginBottom: 8 }}>今日の気分とひとことを残すと、カレンダーに記録が貯まります。</div>
+              <${MoodPicker} key=${`today|${jv}`} dateISO=${new Date().toISOString().slice(0, 10)} onSaved=${onJournalSave} />
+            </div>`}
             ${birth.name && !sampleMode && html`<div style=${{ fontSize: 13, color: C.sub, marginBottom: 10 }}>${birth.name} さんの命式</div>`}
             ${!birth.timeKnown && html`<div style=${{ fontSize: 12, color: C.accent, background: C.accent + "14", border: `1px solid ${C.accent}55`, borderRadius: 8, padding: "7px 10px", marginBottom: 10, lineHeight: 1.6 }}>
               出生時刻が未入力のため <b>12:00</b> として計算しています。時柱・ASC（上昇宮）は概算です。
@@ -868,7 +956,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               <${Chat} key=${`${birth.date}|${birth.time}|${birth.place}|${editingId || ""}`} apiKey=${apiKey} onSaveKey=${onSaveKey} onClearKey=${onClearKey} context=${buildOracleContext(data, birth)} name=${birth.name} tone=${settings.tone} replyLength=${settings.replyLength} oracleName=${settings.oracleName} />
             <//>`}
             ${sec.calendar && data.ten !== undefined && html`<${Section} title="占術カレンダー" color=${C.blue} sub="日ごとの「気」の流れ（攻め／労い／整える／守り）と天中殺日。日付をタップで詳しく。">
-              <${Calendar} birth=${birth} ten=${data.ten} />
+              <${Calendar} birth=${birth} ten=${data.ten} onJournalSave=${onJournalSave} />
             <//>`}
             ${sec.jintai && data.detail && html`<${Section} title="算命学・人体星図" color=${C.purple} sub="生年月日から出す“心の設計図”。各星をタップで意味が出ます。">
               <${Jintai} detail=${data.detail} />
