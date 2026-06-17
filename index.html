@@ -525,18 +525,42 @@
       // ── 西洋占星術：ネイタルチャート（主役機能）──
       // 計算は natal.js(astronomy-engine, 端末内) の生黄経を使用。描画・アスペクト・ハウスは純関数。
       const SIGN_INFO = [
-        ["牡羊", "♈", "火", "開拓・勢い・主導"], ["牡牛", "♉", "地", "安定・五感・継続"],
-        ["双子", "♊", "風", "好奇心・情報・会話"], ["蟹", "♋", "水", "共感・家庭・守り"],
-        ["獅子", "♌", "火", "自信・表現・主役"], ["乙女", "♍", "地", "分析・実務・整える"],
-        ["天秤", "♎", "風", "調和・美・対人"], ["蠍", "♏", "水", "深み・集中・変容"],
-        ["射手", "♐", "火", "自由・探求・楽観"], ["山羊", "♑", "地", "責任・達成・現実"],
-        ["水瓶", "♒", "風", "独自・革新・仲間"], ["魚", "♓", "水", "共感・夢・芸術"],
+        ["牡羊", "♈", "火", "開拓・勢い・主導", "まっすぐで行動が速い開拓者。思い立ったら即動く情熱があり、勝負どころに強い。一方で衝動・短気には注意。"],
+        ["牡牛", "♉", "地", "安定・五感・継続", "五感が豊かでマイペース。安定と心地よさを大切にし、コツコツ積み上げる粘り強さが武器。変化はゆっくり受け入れて。"],
+        ["双子", "♊", "風", "好奇心・情報・会話", "好奇心旺盛で言葉が達者。情報通でフットワークが軽く、人と場をつなぐ。飽きっぽさは興味を絞ると安定する。"],
+        ["蟹", "♋", "水", "共感・家庭・守り", "情に厚く面倒見がよい、身内や居場所を守る安心の達人。感情の波が大きい分、休息とケアで整えると力を発揮。"],
+        ["獅子", "♌", "火", "自信・表現・主役", "華やかで自己表現が得意な主役気質。人を惹きつけ場を盛り上げる。承認欲求は創造や貢献に向けると輝く。"],
+        ["乙女", "♍", "地", "分析・実務・整える", "細やかで分析的、実務能力が高い。役に立つことに喜びを感じ品質を磨く。完璧主義はほどほどに緩めて。"],
+        ["天秤", "♎", "風", "調和・美・対人", "バランス感覚と美意識に優れ、対人調整が上手。公平で洗練されている。優柔不断は自分の基準を持つと克服できる。"],
+        ["蠍", "♏", "水", "深み・集中・変容", "一点集中で深く関わる情熱家。本質を見抜き、ものごとを変容させる力を持つ。独占欲は信頼づくりで昇華できる。"],
+        ["射手", "♐", "火", "自由・探求・楽観", "自由と冒険を愛し視野が広い。楽観的で哲学的、学びと移動でぐんぐん伸びる。大雑把さは要所を詰めて補おう。"],
+        ["山羊", "♑", "地", "責任・達成・現実", "責任感が強く現実的。長期目標に向けて着実に登る実力派で、信頼を勝ち取る。堅さは遊び心で緩めると吉。"],
+        ["水瓶", "♒", "風", "独自・革新・仲間", "独自の視点と革新性を持つ自由人。仲間や理想を大切にする。クールさに人間的な温かさを添えると魅力が増す。"],
+        ["魚", "♓", "水", "共感・夢・芸術", "共感力と想像力が豊かで、やさしく芸術的。境界がやわらかく人に寄り添える。流されやすさは自分の軸を持って。"],
       ];
       const PLANET_INFO = {
-        太陽: ["☉", "自我・人生の目的"], 月: ["☽", "感情・心の安心"], 水星: ["☿", "知性・伝達"],
-        金星: ["♀", "愛・美・楽しみ"], 火星: ["♂", "行動・情熱"], 木星: ["♃", "拡大・幸運"], 土星: ["♄", "責任・試練"],
+        太陽: ["☉", "自我・人生の目的", "人生の目的・自我・「らしさ」の中心。あなたがいちばん輝くテーマを示す。"],
+        月: ["☽", "感情・心の安心", "感情・無意識・安心の源。素の自分や、心が満たされる条件を表す。"],
+        水星: ["☿", "知性・伝達", "考え方・話し方・学び方。知性とコミュニケーションのスタイル。"],
+        金星: ["♀", "愛・美・楽しみ", "愛し方・好み・楽しみ。恋愛・美意識・お金や人との心地よい関わり方。"],
+        火星: ["♂", "行動・情熱", "意欲・行動力・闘い方。何に熱くなり、どう前へ進むかのエネルギー。"],
+        木星: ["♃", "拡大・幸運", "拡大・幸運・成長のテーマ。チャンスが広がりやすい分野と楽観の源。"],
+        土星: ["♄", "責任・試練", "責任・努力・試練のテーマ。時間をかけて鍛えられ、実力と信頼に変わる分野。"],
       };
-      const HOUSE_INFO = ["自分・第一印象", "お金・才能", "学び・会話", "家庭・心の基盤", "恋愛・創造・遊び", "仕事・健康", "パートナー・結婚", "深い絆・継承", "探求・哲学", "天職・社会的役割", "仲間・理想", "内省・潜在意識"];
+      const HOUSE_INFO = [
+        ["自分・第一印象", "あなた自身・体・第一印象。人生の入口と、自分の打ち出し方を表す。"],
+        ["お金・才能", "収入・所有・才能・価値観。何で稼ぎ、何を大切にするか。"],
+        ["学び・会話", "学び・会話・身近な移動・兄弟姉妹。日常の情報とコミュニケーション。"],
+        ["家庭・心の基盤", "家庭・ルーツ・心の安全基地。プライベートの土台となる場所。"],
+        ["恋愛・創造・遊び", "恋愛・創造・遊び・自己表現。心が躍る楽しみと、子どものような喜び。"],
+        ["仕事・健康", "日々の仕事・習慣・健康。役割をこなし、心身を整える領域。"],
+        ["パートナー・結婚", "結婚・パートナー・契約。1対1の深い関係を結ぶ場所。"],
+        ["深い絆・継承", "深い絆・共有財産・継承・変容。他者との濃い結びつきと再生。"],
+        ["探求・哲学", "探求・海外・高等教育・信念。視野を広げる冒険と学び。"],
+        ["天職・社会的役割", "天職・社会的地位・目標。世の中での役割と、到達したい場所。"],
+        ["仲間・理想", "仲間・コミュニティ・未来の理想。横のつながりと希望。"],
+        ["内省・潜在意識", "内省・潜在意識・癒し・秘密。ひとりで深める内なる世界。"],
+      ];
       const ELEM_COLOR = { 火: "#E2554B", 地: "#C9A227", 風: "#5B8DEF", 水: "#3FB984" };
       const ASPECTS_DEF = [
         { name: "コンジャンクション", glyph: "☌", angle: 0, orb: 8, nature: "強調", col: C.accent },
@@ -614,19 +638,22 @@
           </svg>
           </div>
           <div style=${{ fontSize: 12, color: C.sub, textAlign: "center", margin: "2px 0 10px" }}>
-            ASC（上昇宮）<b style=${{ color: C.purple }}>${SIGN_INFO[h.ascSign][0]}座</b> ・ MC（天頂）<b style=${{ color: C.blue }}>${SIGN_INFO[h.mcSign][0]}座</b>
+            ASC（上昇宮）<b style=${{ color: C.purple }}>${SIGN_INFO[h.ascSign][0]}座</b>＝第一印象は「${SIGN_INFO[h.ascSign][3]}」な雰囲気　／　MC（天頂）<b style=${{ color: C.blue }}>${SIGN_INFO[h.mcSign][0]}座</b>＝社会では「${SIGN_INFO[h.mcSign][3]}」が強み
           </div>
           <div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
             ${h.planets.map((p, i) => { const on = i === sel; const col = ELEM_COLOR[SIGN_INFO[p.signIndex][2]]; return html`<button key=${i} onClick=${() => setSel(i)} style=${{ border: `1px solid ${on ? col : C.line}`, background: on ? col + "22" : C.panel2, color: C.text, borderRadius: 999, padding: "5px 10px", fontSize: 13, cursor: "pointer" }}>${p.glyph} ${p.name}</button>`; })}
           </div>
-          <div style=${{ background: C.panel2, border: `1px solid ${ELEM_COLOR[SIGN_INFO[sp.signIndex][2]]}`, borderRadius: 12, padding: 12, marginBottom: 12 }}>
-            <div style=${{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>${sp.glyph} ${sp.name}　<span style=${{ color: ELEM_COLOR[SIGN_INFO[sp.signIndex][2]] }}>${SIGN_INFO[sp.signIndex][1]} ${SIGN_INFO[sp.signIndex][0]}座 ${sp.deg}°</span>　<span style=${{ color: C.faint, fontSize: 13 }}>第${sp.house}ハウス</span></div>
-            <div style=${{ display: "flex", flexDirection: "column", gap: 3, fontSize: 13, lineHeight: 1.6, color: C.sub }}>
-              <div>🪐 <b style=${{ color: C.text }}>${sp.name}</b>＝${PLANET_INFO[sp.name][1]}</div>
-              <div>${SIGN_INFO[sp.signIndex][1]} <b style=${{ color: C.text }}>${SIGN_INFO[sp.signIndex][0]}座</b>＝${SIGN_INFO[sp.signIndex][3]}</div>
-              <div>🏠 <b style=${{ color: C.text }}>第${sp.house}ハウス</b>＝${HOUSE_INFO[sp.house - 1]}</div>
+          ${(() => { const si = sp.signIndex, col = ELEM_COLOR[SIGN_INFO[si][2]]; return html`<div style=${{ background: C.panel2, border: `1px solid ${col}`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+            <div style=${{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>${sp.glyph} ${sp.name}　<span style=${{ color: col }}>${SIGN_INFO[si][1]} ${SIGN_INFO[si][0]}座 ${sp.deg}°</span>　<span style=${{ color: C.faint, fontSize: 13 }}>第${sp.house}ハウス</span></div>
+            <div style=${{ display: "flex", flexDirection: "column", gap: 7, fontSize: 13, lineHeight: 1.7, color: C.sub }}>
+              <div>🪐 <b style=${{ color: C.text }}>${sp.name}（${PLANET_INFO[sp.name][1]}）</b>${PLANET_INFO[sp.name][2]}</div>
+              <div>${SIGN_INFO[si][1]} <b style=${{ color: C.text }}>${SIGN_INFO[si][0]}座</b>：${SIGN_INFO[si][4]}</div>
+              <div>🏠 <b style=${{ color: C.text }}>第${sp.house}ハウス（${HOUSE_INFO[sp.house - 1][0]}）</b>：${HOUSE_INFO[sp.house - 1][1]}</div>
             </div>
-          </div>
+            <div style=${{ marginTop: 9, paddingTop: 9, borderTop: `1px solid ${C.line}`, fontSize: 13, lineHeight: 1.7, color: C.text }}>
+              ✨ <b>読み解き：</b>あなたの<b style=${{ color: col }}>${sp.name}</b>（${PLANET_INFO[sp.name][1]}）は<b style=${{ color: col }}>${SIGN_INFO[si][0]}座</b>らしく「${SIGN_INFO[si][3]}」の質を帯び、<b>${HOUSE_INFO[sp.house - 1][0]}</b>の場面で最も発揮されます。
+            </div>
+          </div>`; })()}
           ${h.aspects.length > 0 && html`<div>
             <div style=${{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>主なアスペクト（天体どうしの角度）</div>
             <div style=${{ display: "flex", flexDirection: "column", gap: 5 }}>
