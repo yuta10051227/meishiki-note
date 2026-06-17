@@ -242,7 +242,7 @@
 
       // ── カスタマイズ設定（端末内に保存）──
       const SETTINGS_STORE = "meishiki-note:settings:v1";
-      const DEFAULT_SECTIONS = { natal: true, wforecast: true, love: true, advisor: true, chat: true, calendar: true, jintai: true, un: true, unsei: true, aishou: true, astro: true };
+      const DEFAULT_SECTIONS = { natal: true, wforecast: true, love: true, life: true, advisor: true, chat: true, calendar: true, jintai: true, un: true, unsei: true, aishou: true, astro: true };
       const DEFAULT_SETTINGS = { tone: "gentle", oracleName: "", replyLength: "normal", dailyOracle: true, sections: { ...DEFAULT_SECTIONS } };
       const loadSettings = () => {
         try {
@@ -591,6 +591,21 @@
         "友達のような恋人関係を好む。自由と個性を尊重し合える相手に惹かれる。独特の感性と程よい距離感が心地よい。",
         "ロマンチックで献身的。共感と一体感を求め、相手に深く寄り添う。優しさは宝だが尽くしすぎには注意。",
       ];
+      // 金星のあるハウス（恋が動く場面・どこで愛が芽生えるか）。
+      const VENUS_HOUSE = [
+        "あなた自身の魅力が前面に出る配置。第一印象や雰囲気が恋の入口。",
+        "価値観や金銭感覚の合う相手と縁。安心できる関係で愛が育つ。",
+        "会話・SNS・学び・近所が出会いの宝庫。言葉のやりとりで恋が進む。",
+        "家庭的な関係を好む。家・身内・くつろげる場所で愛が深まる。",
+        "ど真ん中の恋愛ハウス。趣味・遊び・自己表現の場で恋が華やぐ。",
+        "職場や日常の習慣の中で恋が芽生える。尽くす形で愛を示す。",
+        "1対1の関係に強い縁。結婚・パートナーシップがテーマに。",
+        "深く濃い結びつき。秘密めいた関係や強い縁に惹かれる。",
+        "旅・学び・異文化が出会いの場。価値観を広げる恋や遠距離も。",
+        "仕事・社会的な場で注目され恋が動く。ステータスある相手とも縁。",
+        "友達・コミュニティ・SNSのつながりから恋に発展しやすい。",
+        "ひそやかな恋や献身的な愛。隠れた想い・癒しの関係がテーマ。",
+      ];
       // 火星（情熱・アプローチ・恋の動き方）。
       const MARS_LOVE = [
         "好きになったら即アタック。スピード勝負で押しが強い。情熱的だが熱しやすく、勢いが武器。",
@@ -605,6 +620,21 @@
         "本気だからこそ慎重。時間をかけて確実に。不器用だが責任を持って関係を築く。",
         "友達から自然に発展。独自のペースで、束縛しない距離感でアプローチ。",
         "ムードと優しさで包む。受け身がちでロマンチック、相手に合わせる柔らかな攻め方。",
+      ];
+      // サインごとの「動き方（活かし方）／課題（注意点）」。分野別ガイドに使用。
+      const SIGN_MOVE = [
+        ["先陣を切って即行動。スピードと決断で道を開く。", "勢い任せ・短気・衝突。ひと呼吸おく習慣を。"],
+        ["焦らずコツコツ、質と安定を積み上げる。", "頑固・変化への抵抗。手放す柔軟さを。"],
+        ["情報を集め、軽やかに動いて人をつなぐ。", "飽きっぽさ・浅く広く。一点を深める意識を。"],
+        ["身近な人を大切に、安心の土台を育てる。", "感情の波・内向き。気持ちを言葉にして。"],
+        ["堂々と表現し、人を励まして場を照らす。", "プライド・承認欲求。謙虚さと聞く力を。"],
+        ["分析と工夫で整え、確実に役立てる。", "完璧主義・心配性。70点で出す勇気を。"],
+        ["バランスを取り、対話と美意識で調整する。", "優柔不断・人任せ。自分の基準を持つ。"],
+        ["本気で深く取り組み、本質を見抜いて変える。", "執着・独占。手放しと信頼を意識して。"],
+        ["視野を広げ、学びと挑戦で前進する。", "大雑把・脇の甘さ。要所を詰める。"],
+        ["長期目標へ着実に登り、責任を果たす。", "堅すぎ・抱え込み。遊びと頼る力を。"],
+        ["独自の発想で革新し、仲間と理想を進める。", "クール・距離感。人間味と共感を添えて。"],
+        ["共感と想像力で寄り添い、夢を形にする。", "流されやすさ・境界の曖昧さ。軸を持つ。"],
       ];
       const ELEM_COLOR = { 火: "#E2554B", 地: "#C9A227", 風: "#5B8DEF", 水: "#3FB984" };
       const ASPECTS_DEF = [
@@ -873,14 +903,24 @@
       }
 
       // ── 恋愛・異性への関心（自分の出生図：金星・火星・月・DSC）──
-      function Love({ chart }) {
+      function Love({ chart, transit }) {
         const [open, setOpen] = useState(false);
         if (!chart || !chart.lons || chart.ascDeg == null) return html`<div style=${{ fontSize: 13, color: C.faint }}>計算できませんでした。</div>`;
         const sIdx = (lon) => Math.floor((((lon % 360) + 360) % 360) / 30);
         const v = sIdx(chart.lons.金星), m = sIdx(chart.lons.火星), mo = sIdx(chart.lons.月);
         const ascSign = sIdx(chart.ascDeg), dsc = (ascSign + 6) % 12;
+        const vHouse = ((v - ascSign + 12) % 12) + 1;
         const sg = (i) => `${SIGN_INFO[i][1]} ${SIGN_INFO[i][0]}座`;
         const col = (i) => ELEM_COLOR[SIGN_INFO[i][2]];
+        // 恋の運勢（運行中の金星 × 出生図）
+        const lf = (() => {
+          if (!transit || !transit.lons || transit.lons.金星 == null) return null;
+          const tv = transit.lons.金星, tvS = sIdx(tv), tvH = ((tvS - ascSign + 12) % 12) + 1;
+          const targets = [["太陽", "人生・自己表現"], ["金星", "愛・魅力"], ["火星", "情熱・行動"]];
+          const hits = [];
+          for (const [tn, lab] of targets) { if (chart.lons[tn] == null) continue; const d = angDiff(tv, chart.lons[tn]); for (const asp of ASPECTS_DEF) { if (Math.abs(d - asp.angle) <= asp.orb) { hits.push({ tn, lab, asp, harmo: asp.nature === "調和" || asp.nature === "強調" }); break; } } }
+          return { tvS, tvH, hits };
+        })();
         const card2 = (c, head, body) => html`<div style=${{ background: C.panel2, border: `1px solid ${c}`, borderRadius: 12, padding: 13, marginBottom: 10 }}>
           <div style=${{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>${head}</div>
           <div style=${{ fontSize: 13, lineHeight: 1.8, color: C.sub }}>${body}</div>
@@ -891,11 +931,47 @@
           ${card2(col(m), html`♂ 火星 <span style=${{ color: col(m) }}>${sg(m)}</span>：情熱・アプローチ`, MARS_LOVE[m])}
           ${card2(col(mo), html`☽ 月 <span style=${{ color: col(mo) }}>${sg(mo)}</span>：恋人に求める安心`, html`心が満たされる関係のテーマは「${SIGN_INFO[mo][3]}」。${SIGN_INFO[mo][4]}`)}
           ${card2(C.purple, html`⬇ DSC（下降点）<span style=${{ color: C.purple }}>${sg(dsc)}</span>：惹かれる相手の傾向`, html`あなたが自然と惹かれやすいのは、<b style=${{ color: C.text }}>${SIGN_INFO[dsc][0]}座的な「${SIGN_INFO[dsc][3]}」</b>を持つ人。${SIGN_INFO[dsc][4]}`)}
+          ${card2(col(v), html`🏠 金星 <span style=${{ color: C.faint, fontSize: 12 }}>第${vHouse}ハウス</span>：恋が動く場面`, html`${VENUS_HOUSE[vHouse - 1]}（${HOUSE_INFO[vHouse - 1][0]}の領域）`)}
+          ${lf && html`<div style=${{ background: `linear-gradient(135deg, ${C.red}1F, ${C.panel})`, border: `1px solid ${C.red}`, borderRadius: 12, padding: 13, marginBottom: 10 }}>
+            <div style=${{ fontSize: 14, fontWeight: 700, color: C.red, marginBottom: 4 }}>💫 いまの恋の運勢</div>
+            <div style=${{ fontSize: 13, lineHeight: 1.8, color: C.text }}>運行中の金星が <b>${sg(lf.tvS)}・第${lf.tvH}ハウス（${HOUSE_INFO[lf.tvH - 1][0]}）</b> を通過中。${VENUS_HOUSE[lf.tvH - 1]}</div>
+            ${lf.hits.length > 0 ? lf.hits.map((hh, i) => html`<div key=${i} style=${{ fontSize: 13, lineHeight: 1.7, color: C.sub, marginTop: 5 }}>${hh.harmo ? "✨" : "⚡"} 金星 <span style=${{ color: hh.asp.col, fontWeight: 700 }}>${hh.asp.glyph}${hh.asp.name}</span> あなたの${hh.tn}：${hh.harmo ? `${hh.lab}に追い風。出会い・楽しみ・告白に good な時期。` : `${hh.lab}が刺激される時期。気持ちの空回りに注意。`}</div>`)
+              : html`<div style=${{ fontSize: 13, color: C.faint, marginTop: 5 }}>今は関係をじっくり育てる時期。焦らず楽しんで。</div>`}
+            <div style=${{ fontSize: 11, color: C.faint, marginTop: 6 }}>金星は約3〜4週間で星座を移動。恋の追い風の方向が変わります。</div>
+          </div>`}
           <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "6px 0", borderTop: `1px solid ${C.line}`, marginTop: 4 }} onClick=${() => setOpen(!open)}>
             <span style=${{ fontSize: 13, fontWeight: 700, color: C.green }}>💞 気になる人との相性も見る（おまけ）</span>
             <span style=${{ fontSize: 12, color: C.sub }}>${open ? "閉じる ▲" : "開く ▼"}</span>
           </div>
           ${open && html`<div style=${{ marginTop: 8 }}><${Synastry} chart=${chart} /></div>`}
+        </div>`;
+      }
+
+      // ── 分野別の動き方・課題（出生図のハウス×サイン）──
+      function LifeAreas({ chart }) {
+        const [sel, setSel] = useState(0);
+        if (!chart || !chart.lons || chart.ascDeg == null) return html`<div style=${{ fontSize: 13, color: C.faint }}>計算できませんでした。</div>`;
+        const sIdx = (lon) => Math.floor((((lon % 360) + 360) % 360) / 30);
+        const ascSign = sIdx(chart.ascDeg);
+        const order = ["太陽", "月", "水星", "金星", "火星", "木星", "土星"];
+        const byHouse = {};
+        order.forEach((n) => { if (chart.lons[n] != null) { const hh = ((sIdx(chart.lons[n]) - ascSign + 12) % 12) + 1; (byHouse[hh] = byHouse[hh] || []).push(n); } });
+        const CATS = [["💼 仕事・キャリア", 10], ["💰 お金・才能", 2], ["💞 恋愛・楽しみ", 5], ["🤝 人間関係・パートナー", 7], ["🌿 健康・習慣", 6], ["📚 学び・挑戦", 9], ["🏠 家庭・心の基盤", 4], ["🌙 内面・癒し", 12]];
+        const c = CATS[sel], houseNum = c[1], si = (ascSign + houseNum - 1) % 12, col = ELEM_COLOR[SIGN_INFO[si][2]];
+        const here = byHouse[houseNum] || [];
+        return html`<div>
+          <div style=${{ fontSize: 12, color: C.faint, marginBottom: 10, lineHeight: 1.6 }}>各分野（ハウス）に乗るサインから、活かし方（動き方）と気をつけたい課題を読み解きます。</div>
+          <div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+            ${CATS.map((x, i) => { const on = i === sel; return html`<button key=${i} onClick=${() => setSel(i)} style=${{ border: `1px solid ${on ? C.accent : C.line}`, background: on ? C.accent + "22" : C.panel2, color: C.text, borderRadius: 999, padding: "5px 10px", fontSize: 12.5, cursor: "pointer", fontWeight: on ? 700 : 400 }}>${x[0]}</button>`; })}
+          </div>
+          <div style=${{ background: C.panel2, border: `1px solid ${col}`, borderRadius: 12, padding: 14 }}>
+            <div style=${{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>${c[0]}　<span style=${{ color: C.faint, fontSize: 12 }}>第${houseNum}ハウス</span> × <span style=${{ color: col }}>${SIGN_INFO[si][1]} ${SIGN_INFO[si][0]}座</span></div>
+            <div style=${{ fontSize: 13, lineHeight: 1.8, color: C.text, marginBottom: 6 }}>✅ <b style=${{ color: C.green }}>動き方</b>：${SIGN_MOVE[si][0]}</div>
+            <div style=${{ fontSize: 13, lineHeight: 1.8, color: C.text }}>⚠️ <b style=${{ color: C.red }}>課題</b>：${SIGN_MOVE[si][1]}</div>
+            ${here.length > 0 && html`<div style=${{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}`, fontSize: 12.5, color: C.sub, lineHeight: 1.7 }}>
+              🪐 この分野に効く天体：${here.map((n) => `${PLANET_INFO[n][0]}${n}（${PLANET_INFO[n][1]}）`).join("・")}。ここが特に活性化する人生領域です。
+            </div>`}
+          </div>
         </div>`;
       }
 
@@ -1064,7 +1140,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         const set = (patch) => onChange({ ...settings, ...patch });
         const setSection = (k, v) => onChange({ ...settings, sections: { ...settings.sections, [k]: v } });
         const lbl = { fontSize: 12, color: C.sub, display: "block", margin: "0 0 2px" };
-        const SEC = [["natal", "ネイタルチャート(西洋占星術)"], ["wforecast", "西洋占星術の運勢(日/月/年/運命)"], ["love", "恋愛・異性への関心"], ["advisor", "専属占術師アドバイス"], ["chat", "AI相談"], ["calendar", "占術カレンダー"], ["jintai", "人体星図"], ["un", "今日・今月・今年の運氣(算命学)"], ["unsei", "天中殺・大運"], ["aishou", "相性"], ["astro", "インド占星術ほか"]];
+        const SEC = [["natal", "ネイタルチャート(西洋占星術)"], ["wforecast", "西洋占星術の運勢(日/月/年/運命)"], ["love", "恋愛・異性への関心"], ["life", "分野別の動き方・課題"], ["advisor", "専属占術師アドバイス"], ["chat", "AI相談"], ["calendar", "占術カレンダー"], ["jintai", "人体星図"], ["un", "今日・今月・今年の運氣(算命学)"], ["unsei", "天中殺・大運"], ["aishou", "相性"], ["astro", "インド占星術ほか"]];
         return html`<div style=${card}>
           <div onClick=${() => setOpen(!open)} style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
             <span style=${{ fontSize: 14, fontWeight: 700, color: C.text }}>⚙️ 設定・カスタマイズ</span>
@@ -1395,8 +1471,11 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             ${sec.wforecast !== false && data.chart && data.transit && html`<${Section} title="西洋占星術の運勢（今日・今月・今年・運命）" color=${C.green} sub="運行中の天体をあなたの出生図に重ねた、日・月・年・運命の流れ。">
               <${AstroForecast} natal=${data.chart} transit=${data.transit} birth=${birth} />
             <//>`}
-            ${sec.love !== false && data.chart && html`<${Section} title="恋愛・異性への関心（西洋占星術）" color=${C.red} sub="金星・火星・月・DSCから、あなたの恋愛傾向と惹かれるタイプを読み解きます。">
-              <${Love} chart=${data.chart} />
+            ${sec.love !== false && data.chart && html`<${Section} title="恋愛・異性への関心（西洋占星術）" color=${C.red} sub="金星・火星・月・DSCから恋愛傾向、金星のハウスで恋の舞台、運行中の金星で今の恋の運勢まで。">
+              <${Love} chart=${data.chart} transit=${data.transit} />
+            <//>`}
+            ${sec.life !== false && data.chart && html`<${Section} title="分野別の動き方・課題（西洋占星術）" color=${C.accent} sub="仕事・お金・人間関係・健康など、各分野ごとの活かし方と気をつけたい課題。">
+              <${LifeAreas} chart=${data.chart} />
             <//>`}
             ${sec.advisor && data.advisor && html`<${Section} title="専属占術師アドバイス" color=${C.accent} sub="あなたの命式から、ビジネス・人間関係・健康・今日の指針を読み解きます。">
               <${Advisor} adv=${data.advisor} />
