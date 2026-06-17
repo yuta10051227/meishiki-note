@@ -242,7 +242,7 @@
 
       // ── カスタマイズ設定（端末内に保存）──
       const SETTINGS_STORE = "meishiki-note:settings:v1";
-      const DEFAULT_SECTIONS = { natal: true, advisor: true, chat: true, calendar: true, jintai: true, un: true, unsei: true, aishou: true, astro: true };
+      const DEFAULT_SECTIONS = { natal: true, wforecast: true, advisor: true, chat: true, calendar: true, jintai: true, un: true, unsei: true, aishou: true, astro: true };
       const DEFAULT_SETTINGS = { tone: "gentle", oracleName: "", replyLength: "normal", dailyOracle: true, sections: { ...DEFAULT_SECTIONS } };
       const loadSettings = () => {
         try {
@@ -561,6 +561,21 @@
         ["仲間・理想", "仲間・コミュニティ・未来の理想。横のつながりと希望。"],
         ["内省・潜在意識", "内省・潜在意識・癒し・秘密。ひとりで深める内なる世界。"],
       ];
+      // 太陽星座（あなたの核・人生の目的）の専用解釈。いわゆる「星座占い」の本体。
+      const SUN_SIGN_TEXT = [
+        "情熱とスピードの開拓者。「まず動く」ことで道を切り開く人。先頭やリーダーが似合い、勢い任せの衝突は深呼吸でかわすと吉。自分で決めて進むほど輝きます。",
+        "五感とマイペースを大切にする実りの人。焦らずコツコツ積み上げ、心地よさと豊かさを形にする才能。変化はゆっくりでOK。好きなものに囲まれると最高の力が出ます。",
+        "知と言葉の風の人。好奇心で世界を軽やかにつなぐコミュニケーター。情報・会話・移動の中で輝く。興味を一つに絞らず“掛け算”するのが成功のコツ。",
+        "情と絆を育む守りの人。仲間や家族の安心をつくる名サポーター。共感力が信頼を生む。気分の波は自分のケアを最優先にすると安定して輝けます。",
+        "輝きと表現の主役。堂々と自分を出し、人を励まし場を明るくする太陽そのもの。創造・舞台・人前で本領発揮。承認は“与える側”に回るとさらに大きく返ってきます。",
+        "分析と実務の職人。細部に気づき、人の役に立つことで価値を生む人。整える・改善する才能は一級。完璧を求めすぎず7割で出すと、もっと自由に輝けます。",
+        "調和と美のバランサー。人と人をつなぎ、洗練と公平さで場を整える人。対人や美の分野で輝く。迷ったら“自分はどうしたいか”を基準にすると決断が早まります。",
+        "深さと一途さの探究者。本気で関わり、物事を根本から変える力を持つ人。信頼した相手・テーマにすべてを注ぐ。手放す勇気を持つほど、再生の力が強まります。",
+        "自由と冒険の哲学者。遠くを見て、学びと移動で世界を広げる人。楽観と率直さが人を惹きつける。大きな目標を掲げるほど運が開ける、可能性のスケールが魅力。",
+        "責任と達成の登山家。長期目標へ着実に登り、信頼と実績を積む実力者。社会的役割で輝く。完璧な堅さは、遊びとユーモアで緩めると人望が増します。",
+        "革新と自由の発明家。独自の視点で“当たり前”を更新し、仲間や未来のために動く人。個性とネットワークが武器。冷静さに人間味を添えると理想がより広がります。",
+        "共感と想像の芸術家。境界をやわらかく越えて人に寄り添い、夢や癒しを形にする人。感受性と優しさが宝。自分の軸を持つほど、才能が現実で花開きます。",
+      ];
       const ELEM_COLOR = { 火: "#E2554B", 地: "#C9A227", 風: "#5B8DEF", 水: "#3FB984" };
       const ASPECTS_DEF = [
         { name: "コンジャンクション", glyph: "☌", angle: 0, orb: 8, nature: "強調", col: C.accent },
@@ -650,6 +665,9 @@
               <div>${SIGN_INFO[si][1]} <b style=${{ color: C.text }}>${SIGN_INFO[si][0]}座</b>：${SIGN_INFO[si][4]}</div>
               <div>🏠 <b style=${{ color: C.text }}>第${sp.house}ハウス（${HOUSE_INFO[sp.house - 1][0]}）</b>：${HOUSE_INFO[sp.house - 1][1]}</div>
             </div>
+            ${sp.name === "太陽" && html`<div style=${{ marginTop: 9, paddingTop: 9, borderTop: `1px solid ${C.line}`, fontSize: 13, lineHeight: 1.8, color: C.text }}>
+              🌟 <b style=${{ color: col }}>太陽星座（あなたの核）</b><br />${SUN_SIGN_TEXT[si]}
+            </div>`}
             <div style=${{ marginTop: 9, paddingTop: 9, borderTop: `1px solid ${C.line}`, fontSize: 13, lineHeight: 1.7, color: C.text }}>
               ✨ <b>読み解き：</b>あなたの<b style=${{ color: col }}>${sp.name}</b>（${PLANET_INFO[sp.name][1]}）は<b style=${{ color: col }}>${SIGN_INFO[si][0]}座</b>らしく「${SIGN_INFO[si][3]}」の質を帯び、<b>${HOUSE_INFO[sp.house - 1][0]}</b>の場面で最も発揮されます。
             </div>
@@ -666,6 +684,68 @@
               </div>`)}
             </div>
           </div>`}
+        </div>`;
+      }
+
+      // ── 西洋占星術の運勢（今日/今月/今年/運命）＝トランジット（運行中の天体）×出生図 ──
+      function AstroForecast({ natal, transit, birth }) {
+        const [tab, setTab] = useState("day");
+        if (!natal || natal.ascDeg == null || !transit || !transit.lons) return html`<div style=${{ fontSize: 13, color: C.faint }}>運勢を計算できませんでした。</div>`;
+        const norm360 = (x) => ((x % 360) + 360) % 360;
+        const ascSign = Math.floor(norm360(natal.ascDeg) / 30);
+        const sIdx = (lon) => Math.floor(norm360(lon) / 30);
+        const hOf = (lon) => ((sIdx(lon) - ascSign + 12) % 12) + 1;
+        const L = transit.lons, N = natal.lons;
+        const signN = (i) => `${SIGN_INFO[i][1]} ${SIGN_INFO[i][0]}座`;
+        const houseN = (hi) => `第${hi}ハウス（${HOUSE_INFO[hi - 1][0]}）`;
+        const elemCol = (i) => ELEM_COLOR[SIGN_INFO[i][2]];
+        let age = 0; try { age = (Date.now() - new Date(birth.date + "T12:00:00").getTime()) / (365.25 * 86400000); } catch {}
+        const RET = [29.5, 58.5, 88]; const nextRet = RET.find((a) => a > age) || RET[RET.length - 1];
+        const retYear = birth && birth.date ? new Date(birth.date).getFullYear() + Math.round(nextRet) : null;
+        const tabs = [["day", "☽ 今日"], ["month", "☀ 今月"], ["year", "♃ 今年"], ["fate", "✦ 運命"]];
+        const block = (col, head, body, note) => html`<div style=${{ background: C.panel2, border: `1px solid ${col}`, borderRadius: 12, padding: 13 }}>
+          <div style=${{ fontSize: 14, fontWeight: 700, color: col, marginBottom: 6 }}>${head}</div>
+          <div style=${{ fontSize: 13, lineHeight: 1.8, color: C.text }}>${body}</div>
+          ${note && html`<div style=${{ fontSize: 11, color: C.faint, marginTop: 6 }}>${note}</div>`}
+        </div>`;
+        const row = (e, label, text) => html`<div style=${{ marginBottom: 5 }}><b>${e} ${label}：</b>${text}</div>`;
+        let content;
+        if (tab === "day") {
+          const s = sIdx(L.月), h = hOf(L.月), col = elemCol(s);
+          content = block(col, `☽ 今日：月が${signN(s)}・あなたの${houseN(h)}へ`,
+            html`今日は<b style=${{ color: col }}>${HOUSE_INFO[h - 1][0]}</b>に光が当たる日。${HOUSE_INFO[h - 1][1]} 心のモードは「${SIGN_INFO[s][3]}」——${SIGN_INFO[s][4]}`,
+            "月は約2.5日で星座を移動。毎日テーマが変わります。");
+        } else if (tab === "month") {
+          const s = sIdx(L.太陽), h = hOf(L.太陽), col = elemCol(s);
+          content = block(col, `☀ 今月：太陽が${signN(s)}・あなたの${houseN(h)}を巡る`,
+            html`今月は<b style=${{ color: col }}>${HOUSE_INFO[h - 1][0]}</b>にエネルギーが集まる時期。${HOUSE_INFO[h - 1][1]} ここに時間と意識を注ぐと流れに乗れます。`,
+            "太陽は約1か月で星座を移動。月単位のテーマです。");
+        } else if (tab === "year") {
+          const jh = hOf(L.木星), sh = hOf(L.土星), js = sIdx(L.木星), ss = sIdx(L.土星);
+          content = html`<div style=${{ display: "flex", flexDirection: "column", gap: 10 }}>
+            ${block(C.green, `♃ 今年の追い風：木星が${signN(js)}・${houseN(jh)}`,
+              html`<b style=${{ color: C.green }}>${HOUSE_INFO[jh - 1][0]}</b>が拡大・チャンスのテーマ。${HOUSE_INFO[jh - 1][1]} ここは思いきって広げると吉。`,
+              "木星は約1年で星座を移動。1年の幸運の方向。")}
+            ${block(C.blue, `♄ 今年の課題：土星が${signN(ss)}・${houseN(sh)}`,
+              html`<b style=${{ color: C.blue }}>${HOUSE_INFO[sh - 1][0]}</b>で責任・努力が問われ、乗り越えると実力と信頼に変わる領域。`,
+              "土星は約2.5年で星座を移動。鍛えられるテーマ。")}
+          </div>`;
+        } else {
+          const ns = sIdx(N.太陽), nh = hOf(N.太陽), mc = sIdx(norm360(natal.mcDeg)), col = elemCol(ns);
+          content = block(C.purple, "✦ あなたの運命のテーマ（出生図より）",
+            html`${row("🌞", "人生の目的", html`太陽 <b style=${{ color: col }}>${SIGN_INFO[ns][0]}座</b>＝${SIGN_INFO[ns][3]}`)}
+              ${row("🌅", "生き方の入口(ASC)", html`<b style=${{ color: C.purple }}>${SIGN_INFO[ascSign][0]}座</b>＝${SIGN_INFO[ascSign][3]}`)}
+              ${row("🏔", "社会的使命(MC)", html`<b style=${{ color: C.blue }}>${SIGN_INFO[mc][0]}座</b>＝${SIGN_INFO[mc][3]}`)}
+              ${row("🎭", "活躍の舞台", houseN(nh))}
+              ${row("🪐", "人生の節目(土星回帰)", `約${nextRet}歳ごろ${retYear ? `（${retYear}年前後）` : ""}——生き方が問い直され、本物の土台ができる転換期。`)}`,
+            "出生図に刻まれた、変わらない“持ち味と宿命”の見取り図です。");
+        }
+        return html`<div>
+          <div style=${{ fontSize: 12, color: C.sub, marginBottom: 10, lineHeight: 1.6 }}>運行中の天体（トランジット）をあなたの出生図に重ねた、西洋占星術ベースの運勢です。</div>
+          <div style=${{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+            ${tabs.map(([k, label]) => { const on = tab === k; return html`<button key=${k} onClick=${() => setTab(k)} style=${{ border: `1px solid ${on ? C.purple : C.line}`, background: on ? C.purple + "22" : C.panel2, color: on ? C.purple : C.text, borderRadius: 999, padding: "6px 13px", fontSize: 13, cursor: "pointer", fontWeight: on ? 700 : 400 }}>${label}</button>`; })}
+          </div>
+          ${content}
         </div>`;
       }
 
@@ -834,7 +914,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         const set = (patch) => onChange({ ...settings, ...patch });
         const setSection = (k, v) => onChange({ ...settings, sections: { ...settings.sections, [k]: v } });
         const lbl = { fontSize: 12, color: C.sub, display: "block", margin: "0 0 2px" };
-        const SEC = [["natal", "ネイタルチャート(西洋占星術)"], ["advisor", "専属占術師アドバイス"], ["chat", "AI相談"], ["calendar", "占術カレンダー"], ["jintai", "人体星図"], ["un", "今日・今月・今年の運氣"], ["unsei", "天中殺・大運"], ["aishou", "相性"], ["astro", "インド占星術ほか"]];
+        const SEC = [["natal", "ネイタルチャート(西洋占星術)"], ["wforecast", "西洋占星術の運勢(日/月/年/運命)"], ["advisor", "専属占術師アドバイス"], ["chat", "AI相談"], ["calendar", "占術カレンダー"], ["jintai", "人体星図"], ["un", "今日・今月・今年の運氣(算命学)"], ["unsei", "天中殺・大運"], ["aishou", "相性"], ["astro", "インド占星術ほか"]];
         return html`<div style=${card}>
           <div onClick=${() => setOpen(!open)} style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
             <span style=${{ fontSize: 14, fontWeight: 700, color: C.text }}>⚙️ 設定・カスタマイズ</span>
@@ -1074,6 +1154,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               ten: tenchusatsu(birth),
               dai: daiun(birth),
               chart: computeChart(birth),
+              transit: computeChart({ date: today, time: "12:00", lat: birth.lat, lon: birth.lon, utcOffset: birth.utcOffset }),
               advisor: advisor(birth, today),
             };
           } catch (e) { return { error: String(e.message || e) }; }
@@ -1160,6 +1241,9 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             </div>`}
             ${sec.natal !== false && data.chart && html`<${Section} title="ネイタルチャート（出生図）" color=${C.purple} sub="西洋占星術の主役。生まれた瞬間の天体配置・サイン・ハウス・アスペクトを読み解きます。">
               <${Horoscope} chart=${data.chart} />
+            <//>`}
+            ${sec.wforecast !== false && data.chart && data.transit && html`<${Section} title="西洋占星術の運勢（今日・今月・今年・運命）" color=${C.green} sub="運行中の天体をあなたの出生図に重ねた、日・月・年・運命の流れ。">
+              <${AstroForecast} natal=${data.chart} transit=${data.transit} birth=${birth} />
             <//>`}
             ${sec.advisor && data.advisor && html`<${Section} title="専属占術師アドバイス" color=${C.accent} sub="あなたの命式から、ビジネス・人間関係・健康・今日の指針を読み解きます。">
               <${Advisor} adv=${data.advisor} />
