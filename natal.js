@@ -46,6 +46,8 @@ export function computeChart(birth) {
   const ramcDeg = norm(gst * 15 + lon);
   const eps = 23.4393 * Math.PI / 180, ramc = ramcDeg * Math.PI / 180, phi = lat * Math.PI / 180;
   const asc = norm(Math.atan2(Math.cos(ramc), -(Math.sin(ramc) * Math.cos(eps) + Math.tan(phi) * Math.sin(eps))) * 180 / Math.PI);
+  // MC（南中点・第10ハウスカスプ）: λ_MC = atan2(sin(RAMC), cos(RAMC)·cos ε)
+  const mc = norm(Math.atan2(Math.sin(ramc), Math.cos(ramc) * Math.cos(eps)) * 180 / Math.PI);
 
   // ── 真太陽時（地方時補正）──
   // 標準時のままでは出生地の東西で太陽の位置が最大±数十分ずれる。
@@ -118,6 +120,8 @@ export function computeChart(birth) {
     yearPillar, monthPillar, dayPillar, hourPillar, dayMaster: G[dayStem],
     western: Object.fromEntries(Object.entries(P).map(([k, v]) => [k, signOf(v)])),
     asc: signOf(asc),
+    // ネイタルチャート描画・アスペクト用の生データ（黄経の度数）
+    lons: { ...P }, ascDeg: asc, mcDeg: mc,
     nakshatra: NAK[nakIdx],
     dasha,
   };
