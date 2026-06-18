@@ -127,6 +127,22 @@ export function computeChart(birth) {
   };
 }
 
+// 軽量：指定日時の各天体の黄経(tropical)だけを返す（トランジット探索用。computeChartより安価）。
+export function bodyLongitudes(dateISO, time = "12:00", utcOffset = 9) {
+  const [Y, M, D] = String(dateISO).split("-").map(Number);
+  const [hh, mm] = String(time).split(":").map(Number);
+  const utc = new Date(Date.UTC(Y, M - 1, D, (hh || 12) - utcOffset, mm || 0));
+  const t = A.MakeTime(utc);
+  const elon = (body) =>
+    body === A.Body.Sun ? norm(A.SunPosition(t).elon)
+      : body === A.Body.Moon ? norm(A.EclipticGeoMoon(t).lon)
+        : norm(A.Ecliptic(A.GeoVector(body, t, true)).elon);
+  return {
+    太陽: elon(A.Body.Sun), 月: elon(A.Body.Moon), 水星: elon(A.Body.Mercury),
+    金星: elon(A.Body.Venus), 火星: elon(A.Body.Mars), 木星: elon(A.Body.Jupiter), 土星: elon(A.Body.Saturn),
+  };
+}
+
 // 現行ダシャー（大運MD・サブ期AD）を求める
 function currentDasha(birthUtc, nakIdx, nakFrac, today) {
   const startRulerIdx = nakIdx % 9;

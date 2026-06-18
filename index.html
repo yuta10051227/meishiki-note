@@ -44,7 +44,7 @@
       import { createRoot } from "https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1";
       import htm from "https://esm.sh/htm@3.1.1";
       import {
-        sanmeiDetail, sanmeiUn, tenchusatsu, daiun, aishou, computeChart, advisor, stancesFor,
+        sanmeiDetail, sanmeiUn, tenchusatsu, daiun, aishou, computeChart, advisor, stancesFor, bodyLongitudes,
       } from "./natal.js";
 
       const html = htm.bind(React.createElement);
@@ -662,14 +662,22 @@
         return { planets, asc, ascSign, mc: chart.mcDeg, mcSign: Math.floor((chart.mcDeg || 0) / 30), aspects };
       };
 
-      // 天体が現在のサインを抜けるおおよその時期（平均速度ベース・逆行は無視＝目安）
-      const PLANET_SPEED = { 木星: 0.0831, 土星: 0.03347 }; // °/日（公転からの平均）
-      const signExit = (lon, planet) => {
-        const sp = PLANET_SPEED[planet]; if (!sp) return null;
-        const degLeft = 30 - ((((lon % 360) + 360) % 360) % 30);
-        const days = degLeft / sp;
-        const d = new Date(Date.now() + days * 86400000);
-        const months = days / 30.44;
+      // 天体が現在のサインを抜ける時期（実際の黄経を未来日でサンプリング＝逆行も反映）。
+      // 「このサイン滞在の最後の瞬間」を取るため、逆行で行き来しても正しい終了時期になる。
+      const ymdStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const accurateExit = (planet, fromSign) => {
+        const STEP = planet === "土星" ? 12 : 8;          // サンプル間隔(日)
+        const MAXD = planet === "土星" ? 365 * 3.2 : 365 * 1.6; // 探索範囲(日)
+        let lastIn = 0;
+        for (let day = 0; day <= MAXD; day += STEP) {
+          const dt = new Date(Date.now() + day * 86400000);
+          let lon; try { lon = bodyLongitudes(ymdStr(dt))[planet]; } catch { continue; }
+          if (lon == null) continue;
+          if (Math.floor((((lon % 360) + 360) % 360) / 30) === fromSign) lastIn = day;
+        }
+        const exitDays = lastIn + STEP / 2;
+        const d = new Date(Date.now() + exitDays * 86400000);
+        const months = exitDays / 30.44;
         return { months, ym: `${d.getFullYear()}年${d.getMonth() + 1}月`, label: months >= 18 ? `約${(months / 12).toFixed(1)}年後` : `約${Math.max(1, Math.round(months))}ヶ月後` };
       };
 
@@ -759,7 +767,7 @@
       }
 
       // ── 西洋占星術の運勢（今日/今月/今年/運命）＝トランジット（運行中の天体）×出生図 ──
-      function AstroForecast({ natal, transit, birth }) {
+      function AstroForecast({ natal, transit, birth, exits }) {
         const [tab, setTab] = useState("day");
         if (!natal || natal.ascDeg == null || !transit || !transit.lons) return html`<div style=${{ fontSize: 13, color: C.faint }}>運勢を計算できませんでした。</div>`;
         const norm360 = (x) => ((x % 360) + 360) % 360;
@@ -793,7 +801,7 @@
             "太陽は約1か月で星座を移動。月単位のテーマです。");
         } else if (tab === "year") {
           const jh = hOf(L.木星), sh = hOf(L.土星), js = sIdx(L.木星), ss = sIdx(L.土星);
-          const jx = signExit(L.木星, "木星"), sx = signExit(L.土星, "土星");
+          const jx = exits && exits.木星, sx = exits && exits.土星;
           content = html`<div style=${{ display: "flex", flexDirection: "column", gap: 10 }}>
             ${block(C.green, `♃ 今年の追い風：木星が${signN(js)}・${houseN(jh)}`,
               html`<b style=${{ color: C.green }}>${HOUSE_INFO[jh - 1][0]}</b>が拡大・チャンスのテーマ。${HOUSE_INFO[jh - 1][1]} ここは思いきって広げると吉。${jx ? html`<br /><span style=${{ color: C.faint }}>この幸運期は <b style=${{ color: C.green }}>${jx.ym}ごろまで</b>（${jx.label}・目安）。</span>` : ""}`,
@@ -960,7 +968,7 @@
       }
 
       // ── 分野別の動き方・課題（出生図のハウス×サイン）──
-      function LifeAreas({ chart, transit }) {
+      function LifeAreas({ chart, transit, exits }) {
         const [sel, setSel] = useState(0);
         if (!chart || !chart.lons || chart.ascDeg == null) return html`<div style=${{ fontSize: 13, color: C.faint }}>計算できませんでした。</div>`;
         const sIdx = (lon) => Math.floor((((lon % 360) + 360) % 360) / 30);
@@ -983,8 +991,8 @@
             <div style=${{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>${c[0]}　<span style=${{ color: C.faint, fontSize: 12 }}>第${houseNum}ハウス</span> × <span style=${{ color: col }}>${SIGN_INFO[si][1]} ${SIGN_INFO[si][0]}座</span></div>
             <div style=${{ fontSize: 13, lineHeight: 1.8, color: C.text, marginBottom: 6 }}>✅ <b style=${{ color: C.green }}>動き方</b>：${SIGN_MOVE[si][0]}</div>
             <div style=${{ fontSize: 13, lineHeight: 1.8, color: C.text }}>⚠️ <b style=${{ color: C.red }}>課題</b>：${SIGN_MOVE[si][1]}</div>
-            ${houseNum === jupH && html`<div style=${{ marginTop: 8, background: C.green + "1A", border: `1px solid ${C.green}`, borderRadius: 8, padding: "8px 10px", fontSize: 12.5, lineHeight: 1.7, color: C.text }}>♃ <b style=${{ color: C.green }}>今ここに幸運の木星</b>：この分野が拡大・チャンスの時期。思いきって広げると吉。${(() => { const x = signExit(transit.lons.木星, "木星"); return x ? `（${x.ym}ごろまで・目安）` : ""; })()}</div>`}
-            ${houseNum === satH && html`<div style=${{ marginTop: 8, background: C.blue + "1A", border: `1px solid ${C.blue}`, borderRadius: 8, padding: "8px 10px", fontSize: 12.5, lineHeight: 1.7, color: C.text }}>♄ <b style=${{ color: C.blue }}>今ここに試練の土星</b>：責任と努力で鍛えられる正念場。地道な積み重ねが実力と信頼に変わる。${(() => { const x = signExit(transit.lons.土星, "土星"); return x ? `（${x.ym}ごろまで・目安）` : ""; })()}</div>`}
+            ${houseNum === jupH && html`<div style=${{ marginTop: 8, background: C.green + "1A", border: `1px solid ${C.green}`, borderRadius: 8, padding: "8px 10px", fontSize: 12.5, lineHeight: 1.7, color: C.text }}>♃ <b style=${{ color: C.green }}>今ここに幸運の木星</b>：この分野が拡大・チャンスの時期。思いきって広げると吉。${exits && exits.木星 ? `（${exits.木星.ym}ごろまで）` : ""}</div>`}
+            ${houseNum === satH && html`<div style=${{ marginTop: 8, background: C.blue + "1A", border: `1px solid ${C.blue}`, borderRadius: 8, padding: "8px 10px", fontSize: 12.5, lineHeight: 1.7, color: C.text }}>♄ <b style=${{ color: C.blue }}>今ここに試練の土星</b>：責任と努力で鍛えられる正念場。地道な積み重ねが実力と信頼に変わる。${exits && exits.土星 ? `（${exits.土星.ym}ごろまで）` : ""}</div>`}
             ${here.length > 0 && html`<div style=${{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}`, fontSize: 12.5, color: C.sub, lineHeight: 1.7 }}>
               🪐 この分野に効く天体：${here.map((n) => `${PLANET_INFO[n][0]}${n}（${PLANET_INFO[n][1]}）`).join("・")}。生まれ持って活性化する人生領域です。
             </div>`}
@@ -1013,7 +1021,7 @@
           for (let d = 0; d < 7; d++) {
             const dt = new Date(Date.now() + d * 86400000);
             const iso = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-            let moon; try { moon = computeChart({ date: iso, time: "12:00", lat: birth.lat, lon: birth.lon, utcOffset: birth.utcOffset }).lons.月; } catch { continue; }
+            let moon; try { moon = bodyLongitudes(iso, "12:00", birth.utcOffset).月; } catch { continue; }
             const mH = ((sIdx(moon) - ascSign + 12) % 12) + 1;
             let score = 0, best = null;
             for (const tn of order) {
@@ -1460,13 +1468,23 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
           if (!birth) return null;
           try {
             const today = new Date().toISOString().slice(0, 10);
+            const transit = computeChart({ date: today, time: "12:00", lat: birth.lat, lon: birth.lon, utcOffset: birth.utcOffset });
+            let exits = null;
+            try {
+              const tl = transit.lons || {};
+              exits = {
+                木星: tl.木星 != null ? accurateExit("木星", Math.floor((((tl.木星 % 360) + 360) % 360) / 30)) : null,
+                土星: tl.土星 != null ? accurateExit("土星", Math.floor((((tl.土星 % 360) + 360) % 360) / 30)) : null,
+              };
+            } catch { exits = null; }
             return {
               detail: sanmeiDetail(birth),
               un: sanmeiUn(birth, today),
               ten: tenchusatsu(birth),
               dai: daiun(birth),
               chart: computeChart(birth),
-              transit: computeChart({ date: today, time: "12:00", lat: birth.lat, lon: birth.lon, utcOffset: birth.utcOffset }),
+              transit,
+              exits,
               advisor: advisor(birth, today),
             };
           } catch (e) { return { error: String(e.message || e) }; }
@@ -1555,7 +1573,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               <${Horoscope} chart=${data.chart} />
             <//>`}
             ${sec.wforecast !== false && data.chart && data.transit && html`<${Section} title="西洋占星術の運勢（今日・今月・今年・運命）" color=${C.green} sub="運行中の天体をあなたの出生図に重ねた、日・月・年・運命の流れ。">
-              <${AstroForecast} natal=${data.chart} transit=${data.transit} birth=${birth} />
+              <${AstroForecast} natal=${data.chart} transit=${data.transit} birth=${birth} exits=${data.exits} />
             <//>`}
             ${sec.week !== false && data.chart && html`<${Section} title="今週のハイライト" color=${C.green} sub="運行中の月があなたの出生図を巡る7日間。好機の日・要注意の日をひと目で。">
               <${WeekHighlight} natal=${data.chart} birth=${birth} />
@@ -1564,7 +1582,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               <${Love} chart=${data.chart} transit=${data.transit} />
             <//>`}
             ${sec.life !== false && data.chart && html`<${Section} title="分野別の動き方・課題（西洋占星術）" color=${C.accent} sub="各分野の活かし方と課題に、今の幸運期(木星♃)・正念場(土星♄)を重ねて表示。">
-              <${LifeAreas} chart=${data.chart} transit=${data.transit} />
+              <${LifeAreas} chart=${data.chart} transit=${data.transit} exits=${data.exits} />
             <//>`}
             ${sec.advisor && data.advisor && html`<${Section} title="専属占術師アドバイス" color=${C.accent} sub="あなたの命式から、ビジネス・人間関係・健康・今日の指針を読み解きます。">
               <${Advisor} adv=${data.advisor} />
