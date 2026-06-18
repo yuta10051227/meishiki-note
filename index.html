@@ -326,11 +326,16 @@
         return text;
       }
 
-      function Section({ title, color, children, sub }) {
+      function Section({ title, color, children, sub, collapsible, defaultOpen = true }) {
+        const [open, setOpen] = useState(defaultOpen);
+        const show = open || !collapsible;
         return html`<div style=${card}>
-          <div style=${{ fontSize: 15, fontWeight: 700, color: color || C.text, marginBottom: sub ? 2 : 10 }}>${title}</div>
-          ${sub && html`<div style=${{ fontSize: 12, color: C.faint, marginBottom: 10 }}>${sub}</div>`}
-          ${children}
+          <div onClick=${collapsible ? () => setOpen(!open) : null} style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: collapsible ? "pointer" : "default", marginBottom: show ? (sub ? 2 : 10) : 0 }}>
+            <span style=${{ fontSize: 15, fontWeight: 700, color: color || C.text }}>${title}</span>
+            ${collapsible && html`<span style=${{ fontSize: 12, color: C.sub }}>${open ? "閉じる ▲" : "開く ▼"}</span>`}
+          </div>
+          ${show && sub && html`<div style=${{ fontSize: 12, color: C.faint, marginBottom: 10 }}>${sub}</div>`}
+          ${show && children}
         </div>`;
       }
 
@@ -1569,7 +1574,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             ${!birth.timeKnown && html`<div style=${{ fontSize: 12, color: C.accent, background: C.accent + "14", border: `1px solid ${C.accent}55`, borderRadius: 8, padding: "7px 10px", marginBottom: 10, lineHeight: 1.6 }}>
               出生時刻が未入力のため <b>12:00</b> として計算しています。時柱・ASC（上昇宮）は概算です。
             </div>`}
-            ${sec.natal !== false && data.chart && html`<${Section} title="ネイタルチャート（出生図）" color=${C.purple} sub="西洋占星術の主役。生まれた瞬間の天体配置・サイン・ハウス・アスペクトを読み解きます。">
+            ${sec.natal !== false && data.chart && html`<${Section} title="ネイタルチャート（出生図）" color=${C.purple} sub="西洋占星術の主役。生まれた瞬間の天体配置・サイン・ハウス・アスペクトを読み解きます。" collapsible=${true}>
               <${Horoscope} chart=${data.chart} />
             <//>`}
             ${sec.wforecast !== false && data.chart && data.transit && html`<${Section} title="西洋占星術の運勢（今日・今月・今年・運命）" color=${C.green} sub="運行中の天体をあなたの出生図に重ねた、日・月・年・運命の流れ。">
