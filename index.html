@@ -948,7 +948,7 @@
       }
 
       // ── 分野別の動き方・課題（出生図のハウス×サイン）──
-      function LifeAreas({ chart }) {
+      function LifeAreas({ chart, transit }) {
         const [sel, setSel] = useState(0);
         if (!chart || !chart.lons || chart.ascDeg == null) return html`<div style=${{ fontSize: 13, color: C.faint }}>計算できませんでした。</div>`;
         const sIdx = (lon) => Math.floor((((lon % 360) + 360) % 360) / 30);
@@ -956,20 +956,25 @@
         const order = ["太陽", "月", "水星", "金星", "火星", "木星", "土星"];
         const byHouse = {};
         order.forEach((n) => { if (chart.lons[n] != null) { const hh = ((sIdx(chart.lons[n]) - ascSign + 12) % 12) + 1; (byHouse[hh] = byHouse[hh] || []).push(n); } });
+        // 運行中の木星・土星のハウス（今の幸運期／正念場の分野）
+        const tHouse = (n) => (transit && transit.lons && transit.lons[n] != null) ? ((sIdx(transit.lons[n]) - ascSign + 12) % 12) + 1 : null;
+        const jupH = tHouse("木星"), satH = tHouse("土星");
         const CATS = [["💼 仕事・キャリア", 10], ["💰 お金・才能", 2], ["💞 恋愛・楽しみ", 5], ["🤝 人間関係・パートナー", 7], ["🌿 健康・習慣", 6], ["📚 学び・挑戦", 9], ["🏠 家庭・心の基盤", 4], ["🌙 内面・癒し", 12]];
         const c = CATS[sel], houseNum = c[1], si = (ascSign + houseNum - 1) % 12, col = ELEM_COLOR[SIGN_INFO[si][2]];
         const here = byHouse[houseNum] || [];
         return html`<div>
-          <div style=${{ fontSize: 12, color: C.faint, marginBottom: 10, lineHeight: 1.6 }}>各分野（ハウス）に乗るサインから、活かし方（動き方）と気をつけたい課題を読み解きます。</div>
+          <div style=${{ fontSize: 12, color: C.faint, marginBottom: 10, lineHeight: 1.6 }}>各分野（ハウス）に乗るサインから動き方と課題を、運行中の<b style=${{ color: C.green }}>木星♃＝今の幸運期</b>／<b style=${{ color: C.blue }}>土星♄＝今の正念場</b>を重ねて読みます。</div>
           <div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-            ${CATS.map((x, i) => { const on = i === sel; return html`<button key=${i} onClick=${() => setSel(i)} style=${{ border: `1px solid ${on ? C.accent : C.line}`, background: on ? C.accent + "22" : C.panel2, color: C.text, borderRadius: 999, padding: "5px 10px", fontSize: 12.5, cursor: "pointer", fontWeight: on ? 700 : 400 }}>${x[0]}</button>`; })}
+            ${CATS.map((x, i) => { const on = i === sel; const badge = (x[1] === jupH ? " ♃" : "") + (x[1] === satH ? " ♄" : ""); return html`<button key=${i} onClick=${() => setSel(i)} style=${{ border: `1px solid ${on ? C.accent : C.line}`, background: on ? C.accent + "22" : C.panel2, color: C.text, borderRadius: 999, padding: "5px 10px", fontSize: 12.5, cursor: "pointer", fontWeight: on ? 700 : 400 }}>${x[0]}${badge}</button>`; })}
           </div>
           <div style=${{ background: C.panel2, border: `1px solid ${col}`, borderRadius: 12, padding: 14 }}>
             <div style=${{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>${c[0]}　<span style=${{ color: C.faint, fontSize: 12 }}>第${houseNum}ハウス</span> × <span style=${{ color: col }}>${SIGN_INFO[si][1]} ${SIGN_INFO[si][0]}座</span></div>
             <div style=${{ fontSize: 13, lineHeight: 1.8, color: C.text, marginBottom: 6 }}>✅ <b style=${{ color: C.green }}>動き方</b>：${SIGN_MOVE[si][0]}</div>
             <div style=${{ fontSize: 13, lineHeight: 1.8, color: C.text }}>⚠️ <b style=${{ color: C.red }}>課題</b>：${SIGN_MOVE[si][1]}</div>
+            ${houseNum === jupH && html`<div style=${{ marginTop: 8, background: C.green + "1A", border: `1px solid ${C.green}`, borderRadius: 8, padding: "8px 10px", fontSize: 12.5, lineHeight: 1.7, color: C.text }}>♃ <b style=${{ color: C.green }}>今ここに幸運の木星</b>：この分野が拡大・チャンスの時期（約1年）。思いきって広げると吉。</div>`}
+            ${houseNum === satH && html`<div style=${{ marginTop: 8, background: C.blue + "1A", border: `1px solid ${C.blue}`, borderRadius: 8, padding: "8px 10px", fontSize: 12.5, lineHeight: 1.7, color: C.text }}>♄ <b style=${{ color: C.blue }}>今ここに試練の土星</b>：責任と努力で鍛えられる正念場（約2〜3年）。地道な積み重ねが実力と信頼に変わる。</div>`}
             ${here.length > 0 && html`<div style=${{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}`, fontSize: 12.5, color: C.sub, lineHeight: 1.7 }}>
-              🪐 この分野に効く天体：${here.map((n) => `${PLANET_INFO[n][0]}${n}（${PLANET_INFO[n][1]}）`).join("・")}。ここが特に活性化する人生領域です。
+              🪐 この分野に効く天体：${here.map((n) => `${PLANET_INFO[n][0]}${n}（${PLANET_INFO[n][1]}）`).join("・")}。生まれ持って活性化する人生領域です。
             </div>`}
           </div>
         </div>`;
@@ -1474,8 +1479,8 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             ${sec.love !== false && data.chart && html`<${Section} title="恋愛・異性への関心（西洋占星術）" color=${C.red} sub="金星・火星・月・DSCから恋愛傾向、金星のハウスで恋の舞台、運行中の金星で今の恋の運勢まで。">
               <${Love} chart=${data.chart} transit=${data.transit} />
             <//>`}
-            ${sec.life !== false && data.chart && html`<${Section} title="分野別の動き方・課題（西洋占星術）" color=${C.accent} sub="仕事・お金・人間関係・健康など、各分野ごとの活かし方と気をつけたい課題。">
-              <${LifeAreas} chart=${data.chart} />
+            ${sec.life !== false && data.chart && html`<${Section} title="分野別の動き方・課題（西洋占星術）" color=${C.accent} sub="各分野の活かし方と課題に、今の幸運期(木星♃)・正念場(土星♄)を重ねて表示。">
+              <${LifeAreas} chart=${data.chart} transit=${data.transit} />
             <//>`}
             ${sec.advisor && data.advisor && html`<${Section} title="専属占術師アドバイス" color=${C.accent} sub="あなたの命式から、ビジネス・人間関係・健康・今日の指針を読み解きます。">
               <${Advisor} adv=${data.advisor} />
