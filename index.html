@@ -1004,26 +1004,23 @@
         const here = byHouse[houseNum] || [];
         const transitHere = tByHouse[houseNum] || [];
         return html`<div>
-          <div style=${{ fontSize: 12, color: C.faint, marginBottom: 10, lineHeight: 1.6 }}>各分野（ハウス）に乗るサインから動き方と課題を、運行中の<b style=${{ color: C.green }}>木星♃＝今の幸運期</b>／<b style=${{ color: C.blue }}>土星♄＝今の正念場</b>を重ねて読みます。</div>
+          <div style=${{ fontSize: 12, color: C.faint, marginBottom: 10, lineHeight: 1.6 }}>分野ごとの「活かし方・気をつけること・いい時期」が分かります。<b style=${{ color: C.green }}>🍀＝今チャンス期</b>／<b style=${{ color: C.blue }}>💪＝今ふんばりどき</b>。</div>
           <div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-            ${CATS.map((x, i) => { const on = i === sel; const badge = (x[1] === jupH ? " ♃" : "") + (x[1] === satH ? " ♄" : ""); return html`<button key=${i} onClick=${() => setSel(i)} style=${{ border: `1px solid ${on ? C.accent : C.line}`, background: on ? C.accent + "22" : C.panel2, color: C.text, borderRadius: 999, padding: "5px 10px", fontSize: 12.5, cursor: "pointer", fontWeight: on ? 700 : 400 }}>${x[0]}${badge}</button>`; })}
+            ${CATS.map((x, i) => { const on = i === sel; const badge = (x[1] === jupH ? " 🍀" : "") + (x[1] === satH ? " 💪" : ""); return html`<button key=${i} onClick=${() => setSel(i)} style=${{ border: `1px solid ${on ? C.accent : C.line}`, background: on ? C.accent + "22" : C.panel2, color: C.text, borderRadius: 999, padding: "5px 10px", fontSize: 12.5, cursor: "pointer", fontWeight: on ? 700 : 400 }}>${x[0]}${badge}</button>`; })}
           </div>
           <div style=${{ background: C.panel2, border: `1px solid ${col}`, borderRadius: 12, padding: 14 }}>
-            <div style=${{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>${c[0]}　<span style=${{ color: C.faint, fontSize: 12 }}>第${houseNum}ハウス</span> × <span style=${{ color: col }}>${SIGN_INFO[si][1]} ${SIGN_INFO[si][0]}座</span></div>
+            <div style=${{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>${c[0]}　<span style=${{ color: col, fontSize: 13 }}>${SIGN_INFO[si][0]}座タイプ</span></div>
             <div style=${{ fontSize: 12, color: C.faint, lineHeight: 1.6, marginBottom: 8 }}>${HOUSE_INFO[houseNum - 1][1]}</div>
-            <div style=${{ fontSize: 13, lineHeight: 1.8, color: C.text, marginBottom: 6 }}>✅ <b style=${{ color: C.green }}>動き方</b>：${SIGN_MOVE[si][0]}</div>
-            <div style=${{ fontSize: 13, lineHeight: 1.8, color: C.text }}>⚠️ <b style=${{ color: C.red }}>課題</b>：${SIGN_MOVE[si][1]}</div>
-            ${here.length > 0 && html`<div style=${{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}`, fontSize: 12.5, color: C.sub, lineHeight: 1.8 }}>
-              <b style=${{ color: C.text }}>🪐 生まれ持つ強み</b>（この分野に天体あり）<br />
-              ${here.map((n) => `${PLANET_INFO[n][0]} ${n}（${PLANET_INFO[n][1]}）が効く`).join("／")}
-            </div>`}
+            <div style=${{ fontSize: 13, lineHeight: 1.8, color: C.text, marginBottom: 6 }}>✅ <b style=${{ color: C.green }}>活かし方</b>：${SIGN_MOVE[si][0]}</div>
+            <div style=${{ fontSize: 13, lineHeight: 1.8, color: C.text }}>⚠️ <b style=${{ color: C.red }}>気をつけること</b>：${SIGN_MOVE[si][1]}</div>
+            ${here.length > 0 && html`<div style=${{ marginTop: 8, fontSize: 12.5, color: C.sub, lineHeight: 1.8 }}>💪 <b style=${{ color: C.text }}>生まれ持つ強み</b>：${here.map((n) => `${PLANET_INFO[n][0]}${n}（${PLANET_INFO[n][1]}）`).join("・")}が特に効く分野。</div>`}
             <div style=${{ marginTop: 9, paddingTop: 9, borderTop: `1px solid ${C.line}` }}>
-              <div style=${{ fontSize: 13, fontWeight: 700, color: C.purple, marginBottom: 5 }}>🔄 周期と今の動き</div>
-              <div style=${{ fontSize: 12.5, lineHeight: 1.8, color: C.sub, display: "flex", flexDirection: "column", gap: 4 }}>
-                <div>${transitHere.length ? html`🛰 <b style=${{ color: C.text }}>今この分野を運行中</b>：${transitHere.map((n) => PLANET_INFO[n][0] + n).join("・")} ＝ 動きが出やすい時期。` : html`🛰 今は運行中の主要天体なし（表立った動きは控えめ）。`}</div>
-                <div>☀ <b style=${{ color: C.text }}>年の活性</b>：毎年 <b style=${{ color: C.accent }}>${SUN_MONTH[si]}ごろ</b> 太陽が通り、この分野の山場に。</div>
-                ${hasT && html`<div>${houseNum === jupH ? html`♃ <b style=${{ color: C.green }}>拡大期：今ここ</b>（${exits && exits.木星 ? exits.木星.ym : "—"}ごろまで）。約12年に一度の好機。` : (() => { const e = nextSignEntry("木星", si, transit.lons.木星); return html`♃ <b style=${{ color: C.green }}>拡大期</b>（12年周期）：次は <b>${e.ym}ごろ</b>（約${Math.round(e.years)}年後）。`; })()}</div>`}
-                ${hasT && html`<div>${houseNum === satH ? html`♄ <b style=${{ color: C.blue }}>正念場：今ここ</b>（${exits && exits.土星 ? exits.土星.ym : "—"}ごろまで）。地道さが実力に変わる。` : (() => { const e = nextSignEntry("土星", si, transit.lons.土星); return html`♄ <b style=${{ color: C.blue }}>正念場</b>（29年周期）：次は <b>${e.ym}ごろ</b>（約${Math.round(e.years)}年後）。`; })()}</div>`}
+              <div style=${{ fontSize: 13, fontWeight: 700, color: C.purple, marginBottom: 5 }}>⏰ いい時期・動く時期</div>
+              <div style=${{ fontSize: 12.5, lineHeight: 1.9, color: C.sub, display: "flex", flexDirection: "column", gap: 3 }}>
+                <div>🌟 毎年 <b style=${{ color: C.accent }}>${SUN_MONTH[si]}ごろ</b> が見せ場（この分野が輝く時期）。</div>
+                ${hasT && html`<div>🍀 <b style=${{ color: C.green }}>チャンスが広がる時期</b>：${houseNum === jupH ? html`<b>今まさに！</b>（${exits && exits.木星 ? exits.木星.ym : "—"}ごろまで）` : (() => { const e = nextSignEntry("木星", si, transit.lons.木星); return html`<b>${e.ym}ごろ</b>（約${Math.round(e.years)}年後）`; })()}</div>`}
+                ${hasT && html`<div>💪 <b style=${{ color: C.blue }}>ふんばりが実る時期</b>：${houseNum === satH ? html`<b>今</b>（${exits && exits.土星 ? exits.土星.ym : "—"}ごろまで）` : (() => { const e = nextSignEntry("土星", si, transit.lons.土星); return html`<b>${e.ym}ごろ</b>（約${Math.round(e.years)}年後）`; })()}</div>`}
+                ${transitHere.length > 0 && html`<div>🔆 今ちょうど、この分野が動きやすい時期です。</div>`}
               </div>
             </div>
           </div>
@@ -1611,7 +1608,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             ${sec.love !== false && data.chart && html`<${Section} title="恋愛・異性への関心（西洋占星術）" color=${C.red} sub="金星・火星・月・DSCから恋愛傾向、金星のハウスで恋の舞台、運行中の金星で今の恋の運勢まで。">
               <${Love} chart=${data.chart} transit=${data.transit} />
             <//>`}
-            ${sec.life !== false && data.chart && html`<${Section} title="分野別の動き方・課題（西洋占星術）" color=${C.accent} sub="各分野の活かし方と課題に、今の幸運期(木星♃)・正念場(土星♄)を重ねて表示。">
+            ${sec.life !== false && data.chart && html`<${Section} title="分野別ガイド（仕事・お金・健康ほか）" color=${C.accent} sub="分野ごとの「活かし方・気をつけること・いい時期」をやさしく。" collapsible=${true}>
               <${LifeAreas} chart=${data.chart} transit=${data.transit} exits=${data.exits} />
             <//>`}
             ${sec.advisor && data.advisor && html`<${Section} title="専属占術師アドバイス" color=${C.accent} sub="あなたの命式から、ビジネス・人間関係・健康・今日の指針を読み解きます。">
