@@ -647,6 +647,9 @@
         ["共感と想像力で寄り添い、夢を形にする。", "流されやすさ・境界の曖昧さ。軸を持つ。"],
       ];
       const ELEM_COLOR = { 火: "#E2554B", 地: "#C9A227", 風: "#5B8DEF", 水: "#3FB984" };
+      const ELEM_THEME = { 火: "情熱・行動力・主導する力", 地: "現実力・継続・堅実さ", 風: "知性・対話・社交性", 水: "共感・感受性・直感" };
+      const ELEM_LACK = { 火: "思いきった行動や自己主張", 地: "地に足をつけた継続と現実対応", 風: "客観的な情報整理と対話", 水: "感情への寄り添いと受容" };
+      const ELEM_GROW = { 火: "考えすぎる前に小さく動く", 地: "派手さより積み重ねを信じる", 風: "頭で固めず人と話して広げる", 水: "気持ちを言葉にして共有する" };
       const ASPECTS_DEF = [
         { name: "コンジャンクション", glyph: "☌", angle: 0, orb: 8, nature: "強調", col: C.accent },
         { name: "セクスタイル", glyph: "⚹", angle: 60, orb: 5, nature: "調和", col: C.green },
@@ -808,6 +811,28 @@
           </div>
           <div style=${{ fontSize: 14, lineHeight: 1.9, color: C.text }}>${SUN_SIGN_TEXT[sun]}</div>
           <div style=${{ fontSize: 13, lineHeight: 1.8, color: C.sub, marginTop: 6 }}>心の奥は <b style=${{ color: C.text }}>${SIGN_INFO[moon][0]}座</b> らしく「${SIGN_INFO[moon][3]}」。第一印象は <b style=${{ color: C.text }}>${SIGN_INFO[asc][0]}座</b> の「${SIGN_INFO[asc][3]}」な雰囲気。</div>
+        </div>`;
+      }
+
+      // ── 総合鑑定（エレメント配分＋主要アスペクトから強み・課題・伸ばし方を統合）──
+      function Insight({ chart }) {
+        const h = useMemo(() => buildHoroscope(chart), [chart && chart.ascDeg]);
+        if (!h) return null;
+        const classical = ["太陽", "月", "水星", "金星", "火星", "木星", "土星"];
+        const cnt = { 火: 0, 地: 0, 風: 0, 水: 0 };
+        h.planets.forEach((p) => { if (classical.includes(p.name)) cnt[SIGN_INFO[p.signIndex][2]]++; });
+        const elems = Object.entries(cnt).sort((a, b) => b[1] - a[1]);
+        const dom = elems[0][0], lackEntry = elems[elems.length - 1], lack = lackEntry[0], lackN = lackEntry[1];
+        const harmo = h.aspects.find((a) => a.asp.nature === "調和" || a.asp.nature === "強調");
+        const tense = h.aspects.find((a) => a.asp.nature === "緊張" || a.asp.nature === "対立");
+        const pn = (x) => `${PLANET_INFO[x][0]}${x}`;
+        return html`<div style=${{ ...card, border: `1px solid ${C.accent}` }}>
+          <div style=${{ fontSize: 16, fontWeight: 800, color: C.accent, marginBottom: 8 }}>🔎 総合鑑定</div>
+          <div style=${{ fontSize: 13.5, lineHeight: 1.9, color: C.text, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div>💪 <b style=${{ color: C.green }}>強み</b>：<b style=${{ color: ELEM_COLOR[dom] }}>${dom}の力</b>が豊かで、<b>${ELEM_THEME[dom]}</b>が持ち味。${harmo ? html`特に <b>${pn(harmo.a.name)}と${pn(harmo.b.name)}</b> が${harmo.asp.name}で響き合い、${PLANET_INFO[harmo.a.name][1]}と${PLANET_INFO[harmo.b.name][1]}を自然に両立できます。` : ""}</div>
+            <div>⚠️ <b style=${{ color: C.red }}>課題</b>：${lackN === 0 ? html`<b style=${{ color: ELEM_COLOR[lack] }}>${lack}の要素</b>が手薄で、<b>${ELEM_LACK[lack]}</b>が後回しになりがち。` : html`バランス型。`}${tense ? html`また <b>${pn(tense.a.name)}と${pn(tense.b.name)}</b> の${tense.asp.name}が内面の葛藤を生みやすく、ここが成長のカギ。` : ""}</div>
+            <div>🌱 <b style=${{ color: C.accent }}>伸ばし方</b>：${ELEM_GROW[dom]}こと。そして${lackN === 0 ? `${ELEM_LACK[lack]}を少しずつ補う` : `強みに偏りすぎない`}と、力がさらに開きます。</div>
+          </div>
         </div>`;
       }
 
@@ -1073,7 +1098,7 @@
               </div>
             </div>
             <div style=${{ marginTop: 9, paddingTop: 9, borderTop: `1px solid ${C.line}`, fontSize: 13, lineHeight: 1.8, color: C.text }}>
-              👉 <b>今やるなら</b>：${SIGN_MOVE[si][0]}${houseNum === jupH ? "（今はチャンス期、思いきって）" : houseNum === satH ? "（今は基礎固めを着実に）" : transitHere.length > 0 ? "（今ちょうど動きやすい）" : ""}
+              👉 <b>今やるなら</b>：${here.length > 0 ? `${PLANET_INFO[here[0]][0]}${here[0]}の力（${PLANET_INFO[here[0]][1]}）を軸に、` : ""}${SIGN_MOVE[si][0]}${houseNum === jupH ? "（今はチャンス期、思いきって）" : houseNum === satH ? "（今は基礎固めを着実に）" : transitHere.length > 0 ? "（今ちょうど動きやすい）" : ""}
             </div>
           </div>
         </div>`;
@@ -1660,6 +1685,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             ${view === "me" && html`<div>
               ${birth.name && !sampleMode && html`<div style=${{ fontSize: 14, color: C.sub, marginBottom: 10 }}>${birth.name} さんの星</div>`}
               ${data.chart && html`<${Signature} chart=${data.chart} />`}
+              ${data.chart && html`<${Insight} chart=${data.chart} />`}
               ${sec.natal !== false && data.chart && html`<${Section} title="ネイタルチャート（出生図）" color=${C.purple} sub="生まれた瞬間の星空。天体をタップすると、あなたの性格や才能が分かります。" collapsible=${true}>
                 <${Horoscope} chart=${data.chart} />
               <//>`}
