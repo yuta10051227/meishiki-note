@@ -39,6 +39,7 @@ export function computeChart(birth) {
   const P = {
     太陽: elon(A.Body.Sun), 月: elon(A.Body.Moon), 水星: elon(A.Body.Mercury),
     金星: elon(A.Body.Venus), 火星: elon(A.Body.Mars), 木星: elon(A.Body.Jupiter), 土星: elon(A.Body.Saturn),
+    天王星: elon(A.Body.Uranus), 海王星: elon(A.Body.Neptune), 冥王星: elon(A.Body.Pluto),
   };
 
   // ASC（上昇宮）
@@ -140,6 +141,7 @@ export function bodyLongitudes(dateISO, time = "12:00", utcOffset = 9) {
   return {
     太陽: elon(A.Body.Sun), 月: elon(A.Body.Moon), 水星: elon(A.Body.Mercury),
     金星: elon(A.Body.Venus), 火星: elon(A.Body.Mars), 木星: elon(A.Body.Jupiter), 土星: elon(A.Body.Saturn),
+    天王星: elon(A.Body.Uranus), 海王星: elon(A.Body.Neptune), 冥王星: elon(A.Body.Pluto),
   };
 }
 

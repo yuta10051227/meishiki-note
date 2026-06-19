@@ -553,6 +553,9 @@
         火星: ["♂", "行動・情熱", "意欲・行動力・闘い方。何に熱くなり、どう前へ進むかのエネルギー。"],
         木星: ["♃", "拡大・幸運", "拡大・幸運・成長のテーマ。チャンスが広がりやすい分野と楽観の源。"],
         土星: ["♄", "責任・試練", "責任・努力・試練のテーマ。時間をかけて鍛えられ、実力と信頼に変わる分野。"],
+        天王星: ["♅", "変革・自由", "常識を壊し、自由・個性・革新をもたらす星。変化や独創性のテーマ。"],
+        海王星: ["♆", "夢・直感", "境界を溶かし、夢・直感・癒し・芸術・スピリチュアルを司る星。"],
+        冥王星: ["♇", "変容・再生", "破壊と再生。深層から人生を根こそぎ変える、強烈な変容の星。"],
       };
       const HOUSE_INFO = [
         ["自分・第一印象", "あなた自身・体・第一印象。人生の入口と、自分の打ち出し方を表す。"],
@@ -655,10 +658,10 @@
       const buildHoroscope = (chart) => {
         if (!chart || chart.ascDeg == null || !chart.lons) return null;
         const asc = chart.ascDeg, ascSign = Math.floor(asc / 30);
-        const order = ["太陽", "月", "水星", "金星", "火星", "木星", "土星"];
+        const order = ["太陽", "月", "水星", "金星", "火星", "木星", "土星", "天王星", "海王星", "冥王星"];
         const planets = order.filter((n) => chart.lons[n] != null).map((name) => {
           const lon = chart.lons[name], si = Math.floor(lon / 30);
-          return { name, lon, signIndex: si, deg: +(lon % 30).toFixed(1), house: ((si - ascSign + 12) % 12) + 1, glyph: PLANET_INFO[name][0] };
+          return { name, lon, signIndex: si, deg: +(lon % 30).toFixed(1), house: ((si - ascSign + 12) % 12) + 1, glyph: PLANET_INFO[name][0], outer: name === "天王星" || name === "海王星" || name === "冥王星" };
         });
         const aspects = [];
         for (let i = 0; i < planets.length; i++) for (let j = i + 1; j < planets.length; j++) {
@@ -769,6 +772,7 @@
             <div style=${{ marginTop: 9, paddingTop: 9, borderTop: `1px solid ${C.line}`, fontSize: 13, lineHeight: 1.7, color: C.text }}>
               ✨ <b>読み解き：</b>あなたの<b style=${{ color: col }}>${sp.name}</b>（${PLANET_INFO[sp.name][1]}）は<b style=${{ color: col }}>${SIGN_INFO[si][0]}座</b>らしく「${SIGN_INFO[si][3]}」の質を帯び、<b>${HOUSE_INFO[sp.house - 1][0]}</b>の場面で最も発揮されます。
             </div>
+            ${sp.outer && html`<div style=${{ marginTop: 6, fontSize: 12, color: C.faint, lineHeight: 1.7 }}>🌌 ${sp.name}は「世代の星」（同年代は同じ星座）。サインより、<b style=${{ color: C.sub }}>第${sp.house}ハウス（${HOUSE_INFO[sp.house - 1][0]}）に表れる</b>のがあなた個人のテーマです。</div>`}
           </div>`; })()}
           ${h.aspects.length > 0 && html`<div>
             <div style=${{ fontSize: 13, fontWeight: 700, marginBottom: 3 }}>主なアスペクト（天体どうしの関係）</div>
@@ -866,6 +870,8 @@
           </div>`;
         } else {
           const ns = sIdx(N.太陽), nh = hOf(N.太陽), mc = sIdx(norm360(natal.mcDeg)), col = elemCol(ns);
+          const OUTER = [["天王星", "♅", "変革・自由の風", C.blue], ["海王星", "♆", "夢・癒し・スピリチュアル", C.green], ["冥王星", "♇", "根本からの変容・再生", C.red]];
+          const outerRows = OUTER.filter((o) => L[o[0]] != null).map(([nm, gl, th, cc]) => row(gl, nm, html`<b style=${{ color: cc }}>第${hOf(L[nm])}ハウス（${HOUSE_INFO[hOf(L[nm]) - 1][0]}）</b>に <b>${th}</b>（数年がかりの大きな節目）`));
           content = block(C.purple, "✦ あなたの運命のテーマ（出生図より）",
             html`${row("🌞", "人生の目的", html`太陽 <b style=${{ color: col }}>${SIGN_INFO[ns][0]}座</b>＝${SIGN_INFO[ns][3]}`)}
               ${row("🌅", "生き方の入口(ASC)", html`<b style=${{ color: C.purple }}>${SIGN_INFO[ascSign][0]}座</b>＝${SIGN_INFO[ascSign][3]}`)}
@@ -873,6 +879,12 @@
               ${row("🎭", "活躍の舞台", houseN(nh))}
               ${row("🪐", "人生の節目(土星回帰)", `約${nextRet}歳ごろ${retYear ? `（${retYear}年前後）` : ""}——生き方が問い直され、本物の土台ができる転換期。`)}`,
             "出生図に刻まれた、変わらない“持ち味と宿命”の見取り図です。");
+          content = html`<div style=${{ display: "flex", flexDirection: "column", gap: 10 }}>
+            ${content}
+            ${outerRows.length > 0 && block(C.red, "🌌 いま人生を動かす大きな星（外惑星）",
+              html`${outerRows}`,
+              "天王星・海王星・冥王星は数年〜十数年かけて1つの分野を深く変えます。今その変容が起きている人生領域です。")}
+          </div>`;
         }
         return html`<div>
           <div style=${{ fontSize: 12, color: C.sub, marginBottom: 10, lineHeight: 1.6 }}>運行中の天体（トランジット）をあなたの出生図に重ねた、西洋占星術ベースの運勢です。</div>
@@ -1027,7 +1039,7 @@
         if (!chart || !chart.lons || chart.ascDeg == null) return html`<div style=${{ fontSize: 13, color: C.faint }}>計算できませんでした。</div>`;
         const sIdx = (lon) => Math.floor((((lon % 360) + 360) % 360) / 30);
         const ascSign = sIdx(chart.ascDeg);
-        const order = ["太陽", "月", "水星", "金星", "火星", "木星", "土星"];
+        const order = ["太陽", "月", "水星", "金星", "火星", "木星", "土星", "天王星", "海王星", "冥王星"];
         const byHouse = {};
         order.forEach((n) => { if (chart.lons[n] != null) { const hh = ((sIdx(chart.lons[n]) - ascSign + 12) % 12) + 1; (byHouse[hh] = byHouse[hh] || []).push(n); } });
         // 運行中の木星・土星のハウス（今の幸運期／正念場の分野）
