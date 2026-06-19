@@ -15,8 +15,9 @@
     <title>命式ノート — 算命学・四柱推命・占星術</title>
     <style>
       html, body, #root { height: 100%; margin: 0; }
-      body { background: #0F1115; color: #E8EAED; font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; -webkit-text-size-adjust: 100%; }
+      body { background: #0F1115; color: #E8EAED; font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; -webkit-text-size-adjust: 100%; line-height: 1.7; font-size: 16px; }
       * { box-sizing: border-box; }
+      button { -webkit-tap-highlight-color: transparent; }
       #root:empty::after { content: "読み込み中…"; display: grid; place-items: center; height: 100%; color: #9AA1AC; font-size: 14px; }
       input, select, button { font-family: inherit; }
     </style>
@@ -70,8 +71,8 @@
       let C = THEMES[loadTheme()] || THEMES.dark;
       let inp, card;
       const rebuildStyles = () => {
-        inp = { width: "100%", padding: "11px 12px", marginBottom: 10, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, color: C.text, fontSize: 15 };
-        card = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16, marginBottom: 14 };
+        inp = { width: "100%", padding: "12px 14px", marginBottom: 10, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 11, color: C.text, fontSize: 16 };
+        card = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 16, padding: 18, marginBottom: 16 };
       };
       const applyBodyTheme = () => { try { document.body.style.background = C.bg; document.body.style.color = C.text; } catch {} };
       const applyTheme = (mode) => {
@@ -1450,6 +1451,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         const [jv, setJv] = useState(0); // 記録保存時に再描画させるカウンタ
         const onJournalSave = () => setJv((v) => v + 1);
         const [sampleMode, setSampleMode] = useState(false);
+        const [view, setView] = useState("today"); // 画面タブ：今日/わたし/運勢/恋愛/相談
 
         const persist = (next) => { setStore(next); saveStore(next); };
         const onSaveKey = (k) => { saveKey(k); setApiKey(k); };
@@ -1519,8 +1521,8 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
 
         return html`<div style=${{ maxWidth: 600, margin: "0 auto", padding: "20px 16px 60px" }}>
           <div style=${{ textAlign: "center", marginBottom: 4 }}>
-            <div style=${{ fontSize: 22, fontWeight: 800, letterSpacing: 1 }}>命式ノート</div>
-            <div style=${{ fontSize: 12, color: C.faint }}>算命学・四柱推命・西洋＆インド占星術 — 生年月日からの自前計算</div>
+            <div style=${{ fontSize: 23, fontWeight: 800, letterSpacing: 1 }}>命式ノート</div>
+            <div style=${{ fontSize: 12.5, color: C.faint }}>生年月日から、毎日の指針と“自分の取扱説明書”を。</div>
           </div>
 
           ${!STORAGE_OK && html`<${StorageWarning} />`}
@@ -1583,59 +1585,77 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             ${sampleMode && html`<div style=${{ background: C.purple + "1A", border: `1px solid ${C.purple}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12, fontSize: 13, color: C.text, lineHeight: 1.6 }}>
               👀 これは<b>サンプル表示</b>です。<button onClick=${startNew} style=${{ background: C.purple, color: C.onAccent, border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginLeft: 4 }}>自分の生年月日で見る</button>
             </div>`}
-            ${data.un && html`<${TodayHero} key=${`${birth.date}|${birth.time}|${birth.place}|${sampleMode ? "s" : ""}`} un=${data.un} visit=${visit} celebrate=${celebrate} name=${sampleMode ? "" : birth.name} apiKey=${sampleMode ? "" : apiKey} context=${buildOracleContext(data, birth)} birth=${birth} dailyOracle=${settings.dailyOracle} />`}
-            ${!sampleMode && html`<div style=${{ ...card }}>
-              <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                <span style=${{ fontSize: 15, fontWeight: 700, color: C.green }}>📔 今日の記録</span>
-                <span style=${{ fontSize: 12, color: C.faint }}>${jv >= 0 ? `これまで ${journalCount()}日ぶん` : ""}</span>
-              </div>
-              <div style=${{ fontSize: 12, color: C.faint, marginBottom: 8 }}>今日の気分とひとことを残すと、カレンダーに記録が貯まります。</div>
-              <${MoodPicker} key=${`today|${jv}`} dateISO=${new Date().toISOString().slice(0, 10)} onSaved=${onJournalSave} />
+            <div style=${{ position: "sticky", top: 0, zIndex: 5, background: C.bg, display: "flex", gap: 2, padding: "6px 0 8px", marginBottom: 8, borderBottom: `1px solid ${C.line}`, overflowX: "auto" }}>
+              ${[["today", "🌙 今日"], ["me", "✦ わたし"], ["fortune", "🔮 運勢"], ["love", "💞 恋愛"], ["talk", "💬 相談"]].map(([k, label]) => { const on = view === k; return html`<button key=${k} onClick=${() => setView(k)} style=${{ flex: "1 0 auto", whiteSpace: "nowrap", border: "none", background: "none", color: on ? C.purple : C.sub, fontSize: 14, fontWeight: on ? 700 : 500, padding: "8px 12px", borderBottom: `2px solid ${on ? C.purple : "transparent"}`, cursor: "pointer" }}>${label}</button>`; })}
+            </div>
+
+            ${view === "today" && html`<div>
+              ${data.un && html`<${TodayHero} key=${`${birth.date}|${birth.time}|${birth.place}|${sampleMode ? "s" : ""}`} un=${data.un} visit=${visit} celebrate=${celebrate} name=${sampleMode ? "" : birth.name} apiKey=${sampleMode ? "" : apiKey} context=${buildOracleContext(data, birth)} birth=${birth} dailyOracle=${settings.dailyOracle} />`}
+              ${!birth.timeKnown && html`<div style=${{ fontSize: 13, color: C.accent, background: C.accent + "14", border: `1px solid ${C.accent}55`, borderRadius: 10, padding: "9px 12px", marginBottom: 12, lineHeight: 1.7 }}>
+                出生時刻が未入力のため <b>12:00</b> として計算しています。時刻が分かると、ASC（上昇宮）やハウスがより正確になります。
+              </div>`}
+              ${sec.week !== false && data.chart && html`<${Section} title="今週のハイライト" color=${C.green} sub="運行中の月があなたの星を巡る7日間。好機の日・要注意の日をひと目で。">
+                <${WeekHighlight} natal=${data.chart} birth=${birth} />
+              <//>`}
+              ${!sampleMode && html`<div style=${{ ...card }}>
+                <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+                  <span style=${{ fontSize: 16, fontWeight: 700, color: C.green }}>📔 今日の記録</span>
+                  <span style=${{ fontSize: 12, color: C.faint }}>これまで ${journalCount()}日ぶん</span>
+                </div>
+                <div style=${{ fontSize: 13, color: C.faint, marginBottom: 8 }}>今日の気分とひとことを残すと、カレンダーに記録が貯まります。</div>
+                <${MoodPicker} key=${`today|${jv}`} dateISO=${new Date().toISOString().slice(0, 10)} onSaved=${onJournalSave} />
+              </div>`}
             </div>`}
-            ${birth.name && !sampleMode && html`<div style=${{ fontSize: 13, color: C.sub, marginBottom: 10 }}>${birth.name} さんの命式</div>`}
-            ${!birth.timeKnown && html`<div style=${{ fontSize: 12, color: C.accent, background: C.accent + "14", border: `1px solid ${C.accent}55`, borderRadius: 8, padding: "7px 10px", marginBottom: 10, lineHeight: 1.6 }}>
-              出生時刻が未入力のため <b>12:00</b> として計算しています。時柱・ASC（上昇宮）は概算です。
+            ${view === "me" && html`<div>
+              ${birth.name && !sampleMode && html`<div style=${{ fontSize: 14, color: C.sub, marginBottom: 10 }}>${birth.name} さんの星</div>`}
+              ${sec.natal !== false && data.chart && html`<${Section} title="ネイタルチャート（出生図）" color=${C.purple} sub="生まれた瞬間の星空。天体をタップすると、あなたの性格や才能が分かります。" collapsible=${true}>
+                <${Horoscope} chart=${data.chart} />
+              <//>`}
+              ${sec.life !== false && data.chart && html`<${Section} title="分野別ガイド（仕事・お金・健康ほか）" color=${C.accent} sub="分野ごとの「活かし方・気をつけること・いい時期」をやさしく。" collapsible=${true}>
+                <${LifeAreas} chart=${data.chart} transit=${data.transit} exits=${data.exits} />
+              <//>`}
+              ${sec.jintai && data.detail && html`<${Section} title="算命学・人体星図（東洋の見方）" color=${C.purple} sub="生年月日から出す“心の設計図”。各星をタップで意味が出ます。" collapsible=${true} defaultOpen=${false}>
+                <${Jintai} detail=${data.detail} />
+              <//>`}
             </div>`}
-            ${sec.natal !== false && data.chart && html`<${Section} title="ネイタルチャート（出生図）" color=${C.purple} sub="西洋占星術の主役。生まれた瞬間の天体配置・サイン・ハウス・アスペクトを読み解きます。" collapsible=${true}>
-              <${Horoscope} chart=${data.chart} />
-            <//>`}
-            ${sec.wforecast !== false && data.chart && data.transit && html`<${Section} title="西洋占星術の運勢（今日・今月・今年・運命）" color=${C.green} sub="運行中の天体をあなたの出生図に重ねた、日・月・年・運命の流れ。">
-              <${AstroForecast} natal=${data.chart} transit=${data.transit} birth=${birth} exits=${data.exits} />
-            <//>`}
-            ${sec.week !== false && data.chart && html`<${Section} title="今週のハイライト" color=${C.green} sub="運行中の月があなたの出生図を巡る7日間。好機の日・要注意の日をひと目で。">
-              <${WeekHighlight} natal=${data.chart} birth=${birth} />
-            <//>`}
-            ${sec.love !== false && data.chart && html`<${Section} title="恋愛・異性への関心（西洋占星術）" color=${C.red} sub="金星・火星・月・DSCから恋愛傾向、金星のハウスで恋の舞台、運行中の金星で今の恋の運勢まで。">
-              <${Love} chart=${data.chart} transit=${data.transit} />
-            <//>`}
-            ${sec.life !== false && data.chart && html`<${Section} title="分野別ガイド（仕事・お金・健康ほか）" color=${C.accent} sub="分野ごとの「活かし方・気をつけること・いい時期」をやさしく。" collapsible=${true}>
-              <${LifeAreas} chart=${data.chart} transit=${data.transit} exits=${data.exits} />
-            <//>`}
-            ${sec.advisor && data.advisor && html`<${Section} title="専属占術師アドバイス" color=${C.accent} sub="あなたの命式から、ビジネス・人間関係・健康・今日の指針を読み解きます。">
-              <${Advisor} adv=${data.advisor} />
-            <//>`}
-            ${sec.chat && html`<${Section} title="AIに相談する（占い師チャット）" color=${C.green} sub="あなたの命式を踏まえて、占い師に直接相談できます。※相談時は命式と相談内容を Gemini に送信します。">
-              <${Chat} key=${`${birth.date}|${birth.time}|${birth.place}|${editingId || ""}`} apiKey=${apiKey} onSaveKey=${onSaveKey} onClearKey=${onClearKey} context=${buildOracleContext(data, birth)} name=${birth.name} tone=${settings.tone} replyLength=${settings.replyLength} oracleName=${settings.oracleName} />
-            <//>`}
-            ${sec.calendar && data.ten !== undefined && html`<${Section} title="占術カレンダー" color=${C.blue} sub="日ごとの「気」の流れ（攻め／労い／整える／守り）と天中殺日。日付をタップで詳しく。">
-              <${Calendar} birth=${birth} ten=${data.ten} onJournalSave=${onJournalSave} />
-            <//>`}
-            ${sec.jintai && data.detail && html`<${Section} title="算命学・人体星図" color=${C.purple} sub="生年月日から出す“心の設計図”。各星をタップで意味が出ます。">
-              <${Jintai} detail=${data.detail} />
-            <//>`}
-            ${sec.un && data.un && html`<${Section} title="今日・今月・今年の運氣" color=${C.purple} sub="あなたの日干に、今動いている星（十大主星）を重ねた流れ・動き方。">
-              <${Flow} un=${data.un} />
-            <//>`}
-            ${sec.unsei && (data.ten || data.dai) && html`<${Section} title="天中殺・大運（人生の流れ）" color=${C.blue}>
-              <${Unsei} ten=${data.ten} dai=${data.dai} />
-            <//>`}
-            ${sec.aishou && html`<${Section} title="相性を見る（2人）" color=${C.green}>
-              <${Aishou} birth=${birth} />
-            <//>`}
-            ${sec.astro && data.chart && html`<${Section} title="インド占星術・サイデリアル（補助）" color=${C.accent} sub="ナクシャトラやダシャー（インド式の運勢周期）。西洋のネイタルは上のチャートを参照。">
-              <${AstroSummary} chart=${data.chart} />
-            <//>`}
-            <div style=${{ fontSize: 11, color: C.faint, textAlign: "center", marginTop: 10, lineHeight: 1.6 }}>占いとして参考程度に。占いの計算・保存はすべて端末内で完結します。AI相談を使う場合のみ、命式と相談内容を Gemini（Google）に送信します。</div>
+
+            ${view === "fortune" && html`<div>
+              ${sec.wforecast !== false && data.chart && data.transit && html`<${Section} title="運勢（今日・今月・今年・運命）" color=${C.green} sub="運行中の星をあなたの出生図に重ねた、日・月・年・運命の流れ。">
+                <${AstroForecast} natal=${data.chart} transit=${data.transit} birth=${birth} exits=${data.exits} />
+              <//>`}
+              ${sec.calendar && data.ten !== undefined && html`<${Section} title="占いカレンダー" color=${C.blue} sub="日ごとの流れ（攻め／労い／整える／守り）と気をつけたい日。日付タップで詳しく。" collapsible=${true} defaultOpen=${false}>
+                <${Calendar} birth=${birth} ten=${data.ten} onJournalSave=${onJournalSave} />
+              <//>`}
+              ${sec.un && data.un && html`<${Section} title="今日・今月・今年の運氣（東洋の見方）" color=${C.purple} sub="あなたの日干に、今動いている星を重ねた流れ・動き方。" collapsible=${true} defaultOpen=${false}>
+                <${Flow} un=${data.un} />
+              <//>`}
+              ${sec.unsei && (data.ten || data.dai) && html`<${Section} title="天中殺・大運（人生の流れ・東洋）" color=${C.blue} collapsible=${true} defaultOpen=${false}>
+                <${Unsei} ten=${data.ten} dai=${data.dai} />
+              <//>`}
+            </div>`}
+
+            ${view === "love" && html`<div>
+              ${sec.love !== false && data.chart && html`<${Section} title="恋愛・異性への関心" color=${C.red} sub="あなたの恋愛傾向・惹かれるタイプ・恋が動く場面・今の恋の運勢まで。">
+                <${Love} chart=${data.chart} transit=${data.transit} />
+              <//>`}
+              ${sec.aishou && html`<${Section} title="相性を見る（2人・東洋）" color=${C.green} collapsible=${true} defaultOpen=${false}>
+                <${Aishou} birth=${birth} />
+              <//>`}
+            </div>`}
+
+            ${view === "talk" && html`<div>
+              ${sec.advisor && data.advisor && html`<${Section} title="専属占術師アドバイス" color=${C.accent} sub="あなたの星から、仕事・人間関係・健康・今日の指針を読み解きます。">
+                <${Advisor} adv=${data.advisor} />
+              <//>`}
+              ${sec.chat && html`<${Section} title="AIに相談する（占い師チャット）" color=${C.green} sub="あなたの星を踏まえて、占い師に直接相談できます。※相談時のみ内容を Gemini に送信します。">
+                <${Chat} key=${`${birth.date}|${birth.time}|${birth.place}|${editingId || ""}`} apiKey=${apiKey} onSaveKey=${onSaveKey} onClearKey=${onClearKey} context=${buildOracleContext(data, birth)} name=${birth.name} tone=${settings.tone} replyLength=${settings.replyLength} oracleName=${settings.oracleName} />
+              <//>`}
+              ${sec.astro && data.chart && html`<${Section} title="インド占星術・サイデリアル（補助）" color=${C.accent} sub="ナクシャトラやダシャー（インド式の運勢周期）。" collapsible=${true} defaultOpen=${false}>
+                <${AstroSummary} chart=${data.chart} />
+              <//>`}
+            </div>`}
+
+            <div style=${{ fontSize: 11, color: C.faint, textAlign: "center", marginTop: 16, lineHeight: 1.6 }}>占いとして参考程度に。計算・保存はすべて端末内で完結します。AI相談を使う場合のみ、内容を Gemini（Google）に送信します。</div>
           </div>`}
         </div>`;
       }
