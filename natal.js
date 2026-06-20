@@ -49,6 +49,10 @@ export function computeChart(birth) {
   const asc = norm(Math.atan2(Math.cos(ramc), -(Math.sin(ramc) * Math.cos(eps) + Math.tan(phi) * Math.sin(eps))) * 180 / Math.PI);
   // MC（南中点・第10ハウスカスプ）: λ_MC = atan2(sin(RAMC), cos(RAMC)·cos ε)
   const mc = norm(Math.atan2(Math.sin(ramc), Math.cos(ramc) * Math.cos(eps)) * 180 / Math.PI);
+  // 月の平均昇交点（ドラゴンヘッド/ノースノード）。Meeus の平均黄経式（逆行）。
+  const JD = utc.getTime() / 86400000 + 2440587.5;
+  const Tn = (JD - 2451545.0) / 36525;
+  const node = norm(125.04452 - 1934.136261 * Tn + 0.0020708 * Tn * Tn + (Tn * Tn * Tn) / 450000);
 
   // ── 真太陽時（地方時補正）──
   // 標準時のままでは出生地の東西で太陽の位置が最大±数十分ずれる。
@@ -122,7 +126,7 @@ export function computeChart(birth) {
     western: Object.fromEntries(Object.entries(P).map(([k, v]) => [k, signOf(v)])),
     asc: signOf(asc),
     // ネイタルチャート描画・アスペクト用の生データ（黄経の度数）
-    lons: { ...P }, ascDeg: asc, mcDeg: mc,
+    lons: { ...P, ノード: node }, ascDeg: asc, mcDeg: mc,
     nakshatra: NAK[nakIdx],
     dasha,
   };

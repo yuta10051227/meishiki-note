@@ -182,6 +182,12 @@
       const MOODS = [[1, "😣"], [2, "😕"], [3, "😐"], [4, "🙂"], [5, "😄"]];
       const moodEmoji = (m) => { const f = MOODS.find((x) => x[0] === m); return f ? f[1] : ""; };
 
+      // ── 週次コーチング（運勢に基づく問い→宣言→達成。行動変容を促す）──
+      const COACH_STORE = "meishiki-note:coach:v1";
+      const mondayKey = () => { const d = new Date(); const off = (d.getDay() + 6) % 7; d.setDate(d.getDate() - off); return ymd(d); };
+      const loadCoach = () => { try { return JSON.parse(localStorage.getItem(COACH_STORE) || "{}") || {}; } catch { return {}; } };
+      const saveCoach = (o) => { try { localStorage.setItem(COACH_STORE, JSON.stringify(o)); } catch {} };
+
       // ── ストリークのマイルストーン（損失回避＋達成感で継続を後押し）──
       const MILESTONE_STORE = "meishiki-note:milestone:v1";
       const MILESTONES = [3, 7, 14, 30, 50, 100, 200, 365];
@@ -646,6 +652,36 @@
         ["独自の発想で革新し、仲間と理想を進める。", "クール・距離感。人間味と共感を添えて。"],
         ["共感と想像力で寄り添い、夢を形にする。", "流されやすさ・境界の曖昧さ。軸を持つ。"],
       ];
+      // 月星座（心の世界）。文学的な短文で“読み物”の厚みを出す。
+      const MOON_SIGN = [
+        "胸の奥には小さな火種。素直な衝動のままに動けたとき、心はいちばん安らぐ。",
+        "穏やかさと心地よさが心の栄養。慣れた香り、手ざわり、いつもの席に守られる。",
+        "言葉と好奇心で心がめぐる。話せること・知れることそのものが、安心になる。",
+        "情の海を持つ人。大切な人とのつながりと“居場所”が、いつでも帰れる港になる。",
+        "認められ、愛されると心に灯がともる。素直に喜びを表すことが、何よりの支え。",
+        "整えること、誰かの役に立つことで心が静まる。小さな秩序が、不安をほどく。",
+        "調和と美しさに心がやわらぐ。穏やかな関係の中でこそ、ほんとうの力が出る。",
+        "深く濃い感情の持ち主。心から信じられる相手にだけ、そっと本音の扉を開く。",
+        "自由と希望が心の燃料。遠い世界や未来を思い描くと、元気がよみがえる。",
+        "役割を果たし、頼られることで安心する。背負うほどに、静かな自信が育つ。",
+        "ひとりの時間と自由が心を保つ。分かってくれる仲間との“ほどよい距離”が心地よい。",
+        "やわらかく、溶けやすい心。静けさや音楽、祈りのような時間に癒やされていく。",
+      ];
+      // ノース・ノード（ドラゴンヘッド＝今生で伸ばす“魂の方向”）。サイン別。
+      const NODE_SIGN = [
+        "自立と勇気を育てる人生。人任せをやめ、自分で決めて踏み出すことが魂の成長。",
+        "焦りを手放し、地に足をつけて積み上げる人生。自分の価値と安心を育てるのがテーマ。",
+        "好奇心を広げ、学び・対話・つながりを増やす人生。決めつけず軽やかに動くと開ける。",
+        "心と身近な絆を大切にする人生。鎧を脱ぎ、感情を許して受け取ることが魂のテーマ。",
+        "自分を表現し、主役として輝く人生。人目より“自分の喜び”で動くことが成長。",
+        "日々を整え、実務と健康を磨く人生。理想を現実の習慣へ落とすことがテーマ。",
+        "他者と協力し、調和とパートナーシップを学ぶ人生。一人で抱えず分かち合うと伸びる。",
+        "深く関わり、本気の絆と変容を体験する人生。表面でなく本質へ踏み込むことがテーマ。",
+        "信念と大きな視野を育てる人生。細部より意味・冒険・学びへ向かうことが成長。",
+        "責任を引き受け、社会で実を結ぶ人生。甘えを手放し、目標を形にするのがテーマ。",
+        "枠を超え、仲間や未来・理想のために生きる人生。執着を手放し自由になることが成長。",
+        "委ね・共感・スピリチュアルを育てる人生。力みを緩め、流れを信頼することがテーマ。",
+      ];
       const ELEM_COLOR = { 火: "#E2554B", 地: "#C9A227", 風: "#5B8DEF", 水: "#3FB984" };
       const ELEM_THEME = { 火: "情熱・行動力・主導する力", 地: "現実力・継続・堅実さ", 風: "知性・対話・社交性", 水: "共感・感受性・直感" };
       const ELEM_LACK = { 火: "思いきった行動や自己主張", 地: "地に足をつけた継続と現実対応", 風: "客観的な情報整理と対話", 水: "感情への寄り添いと受容" };
@@ -804,13 +840,15 @@
           <div style=${{ fontSize: 18 }}>${SIGN_INFO[i][1]}</div>
           <div style=${{ fontSize: 13, fontWeight: 700, color: ELEM_COLOR[SIGN_INFO[i][2]] }}>${SIGN_INFO[i][0]}座</div>
         </div>`;
+        const line = (icon, label, body) => html`<div style=${{ marginBottom: 8 }}><span style=${{ fontSize: 12.5, color: C.purple, fontWeight: 700 }}>${icon} ${label}</span><div style=${{ fontSize: 14, lineHeight: 1.95, color: C.text, marginTop: 2 }}>${body}</div></div>`;
         return html`<div style=${{ background: `linear-gradient(135deg, ${C.purple}26, ${C.panel})`, border: `1px solid ${C.purple}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
-          <div style=${{ fontSize: 16, fontWeight: 800, marginBottom: 8 }}>✦ あなたという人</div>
-          <div style=${{ display: "flex", gap: 8, marginBottom: 10 }}>
+          <div style=${{ fontSize: 16, fontWeight: 800, marginBottom: 10 }}>✦ あなたという人</div>
+          <div style=${{ display: "flex", gap: 8, marginBottom: 12 }}>
             ${chip("核（太陽）", sun)}${chip("心（月）", moon)}${chip("印象（ASC）", asc)}
           </div>
-          <div style=${{ fontSize: 14, lineHeight: 1.9, color: C.text }}>${SUN_SIGN_TEXT[sun]}</div>
-          <div style=${{ fontSize: 13, lineHeight: 1.8, color: C.sub, marginTop: 6 }}>心の奥は <b style=${{ color: C.text }}>${SIGN_INFO[moon][0]}座</b> らしく「${SIGN_INFO[moon][3]}」。第一印象は <b style=${{ color: C.text }}>${SIGN_INFO[asc][0]}座</b> の「${SIGN_INFO[asc][3]}」な雰囲気。</div>
+          ${line("🌞", `核は ${SIGN_INFO[sun][0]}座`, SUN_SIGN_TEXT[sun])}
+          ${line("🌙", `心は ${SIGN_INFO[moon][0]}座`, MOON_SIGN[moon])}
+          ${line("🌅", `まとう空気は ${SIGN_INFO[asc][0]}座`, html`はじめて会う人の目には、<b style=${{ color: C.text }}>「${SIGN_INFO[asc][3]}」</b>な雰囲気をまとう人として映ります。${SIGN_INFO[asc][4]}`)}
         </div>`;
       }
 
@@ -833,6 +871,25 @@
             <div>⚠️ <b style=${{ color: C.red }}>課題</b>：${lackN === 0 ? html`<b style=${{ color: ELEM_COLOR[lack] }}>${lack}の要素</b>が手薄で、<b>${ELEM_LACK[lack]}</b>が後回しになりがち。` : html`バランス型。`}${tense ? html`また <b>${pn(tense.a.name)}と${pn(tense.b.name)}</b> の${tense.asp.name}が内面の葛藤を生みやすく、ここが成長のカギ。` : ""}</div>
             <div>🌱 <b style=${{ color: C.accent }}>伸ばし方</b>：${ELEM_GROW[dom]}こと。そして${lackN === 0 ? `${ELEM_LACK[lack]}を少しずつ補う` : `強みに偏りすぎない`}と、力がさらに開きます。</div>
           </div>
+        </div>`;
+      }
+
+      // ── 魂の課題（ドラゴンヘッド＝ノース／サウスノード）──
+      function SoulNode({ chart }) {
+        if (!chart || !chart.lons || chart.lons.ノード == null || chart.ascDeg == null) return null;
+        const sI = (l) => Math.floor((((l % 360) + 360) % 360) / 30);
+        const ascSign = sI(chart.ascDeg);
+        const nn = sI(chart.lons.ノード), sn = (nn + 6) % 12;
+        const nnHouse = ((nn - ascSign + 12) % 12) + 1, snHouse = ((sn - ascSign + 12) % 12) + 1;
+        return html`<div style=${{ ...card, border: `1px solid ${C.purple}` }}>
+          <div style=${{ fontSize: 16, fontWeight: 800, color: C.purple, marginBottom: 4 }}>🐉 魂の課題（ドラゴンヘッド）</div>
+          <div style=${{ fontSize: 12, color: C.faint, marginBottom: 10, lineHeight: 1.6 }}>今生で“伸ばす方向”と、慣れすぎて手放したい“過去の癖”。占星術でいちばん運命的なポイントです。</div>
+          <div style=${{ background: C.panel2, border: `1px solid ${C.purple}55`, borderRadius: 10, padding: 12, marginBottom: 8 }}>
+            <div style=${{ fontSize: 14, fontWeight: 700, marginBottom: 3 }}>➤ 伸ばす方向：<span style=${{ color: C.purple }}>${SIGN_INFO[nn][1]} ${SIGN_INFO[nn][0]}座</span>・第${nnHouse}ハウス</div>
+            <div style=${{ fontSize: 13.5, lineHeight: 1.9, color: C.text }}>${NODE_SIGN[nn]}</div>
+            <div style=${{ fontSize: 12.5, color: C.sub, marginTop: 4 }}>舞台は <b style=${{ color: C.text }}>${HOUSE_INFO[nnHouse - 1][0]}</b>（${HOUSE_INFO[nnHouse - 1][1]}）。ここで挑戦するほど運が開きます。</div>
+          </div>
+          <div style=${{ fontSize: 12.5, color: C.sub, lineHeight: 1.8 }}>🍃 手放す癖：${SIGN_INFO[sn][0]}座的な「${SIGN_INFO[sn][3]}」（第${snHouse}ハウス）に偏りすぎると停滞のサイン。慣れた安全地帯です。</div>
         </div>`;
       }
 
@@ -1397,6 +1454,42 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         </div>`;
       }
 
+      // ── 週次コーチング・カード ──
+      const COACH_Q = [
+        "ここで今週、小さく一歩踏み出すとしたら？", "この分野で、今週やめてみたいことは？",
+        "ここで今週、誰に何を伝えますか？", "この分野で、今週“整えたい”一つは？",
+        "ここで今週、勇気を出して始めることは？",
+      ];
+      function Coaching({ natal, transit }) {
+        const wk = mondayKey();
+        const sI = (l) => Math.floor((((l % 360) + 360) % 360) / 30);
+        const ascSign = natal && natal.ascDeg != null ? sI(natal.ascDeg) : 0;
+        const sunHouse = (transit && transit.lons && transit.lons.太陽 != null) ? ((sI(transit.lons.太陽) - ascSign + 12) % 12) + 1 : 1;
+        const init = () => { const o = loadCoach(); return o.key === wk ? o : { key: wk, focus: sunHouse, commit: "", done: false, total: o.total || 0 }; };
+        const [data, setData] = useState(init);
+        const [draft, setDraft] = useState(data.commit || "");
+        const persist = (next) => { setData(next); saveCoach(next); };
+        const q = COACH_Q[(data.focus + new Date().getDate()) % COACH_Q.length];
+        return html`<div style=${{ background: `linear-gradient(135deg, ${C.accent}22, ${C.panel})`, border: `1px solid ${C.accent}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
+          <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <span style=${{ fontSize: 16, fontWeight: 800, color: C.accent }}>🎯 今週のコーチング</span>
+            ${data.total > 0 && html`<span style=${{ fontSize: 12, color: C.faint }}>達成 ${data.total}回</span>`}
+          </div>
+          <div style=${{ fontSize: 13.5, lineHeight: 1.8, color: C.text, marginBottom: 10 }}>今週スポットが当たるのは <b style=${{ color: C.accent }}>${HOUSE_INFO[data.focus - 1][0]}</b>。<br />${q}</div>
+          ${!data.commit ? html`<div>
+            <input value=${draft} onInput=${(e) => setDraft(e.target.value)} placeholder="わたしの宣言（今週やる一つ）" style=${{ ...inp, marginBottom: 8 }} />
+            <button onClick=${() => { if (draft.trim()) persist({ ...data, commit: draft.trim() }); }} style=${{ ...inp, marginBottom: 0, background: C.accent, color: C.onAccent, fontWeight: 700, border: "none", cursor: "pointer" }}>宣言する</button>
+          </div>` : html`<div>
+            <div style=${{ background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, padding: "10px 12px", fontSize: 14, color: C.text, marginBottom: 8 }}>📌 ${data.commit}</div>
+            ${data.done ? html`<div style=${{ fontSize: 13.5, color: C.green, fontWeight: 700 }}>✅ 今週は達成！自分を認めてあげてください。</div>`
+              : html`<div style=${{ display: "flex", gap: 8 }}>
+                <button onClick=${() => persist({ ...data, done: true, total: (data.total || 0) + 1 })} style=${{ ...inp, marginBottom: 0, flex: 1, background: C.green, color: C.onAccent, fontWeight: 700, border: "none", cursor: "pointer" }}>できた！✅</button>
+                <button onClick=${() => persist({ ...data, commit: "" })} style=${{ ...inp, marginBottom: 0, width: 84, background: C.panel2, color: C.sub, border: `1px solid ${C.line}`, cursor: "pointer" }}>書き直す</button>
+              </div>`}
+          </div>`}
+        </div>`;
+      }
+
       // ── 今日のヒーロー（毎日開く動機・最上部に常設）──
       const WD_JP = ["日", "月", "火", "水", "木", "金", "土"];
       function TodayHero({ un, visit, name, celebrate, apiKey, context, birth, dailyOracle }) {
@@ -1681,11 +1774,13 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
                 <div style=${{ fontSize: 13, color: C.faint, marginBottom: 8 }}>今日の気分とひとことを残すと、カレンダーに記録が貯まります。</div>
                 <${MoodPicker} key=${`today|${jv}`} dateISO=${new Date().toISOString().slice(0, 10)} onSaved=${onJournalSave} />
               </div>`}
+              ${!sampleMode && data.chart && html`<${Coaching} natal=${data.chart} transit=${data.transit} />`}
             </div>`}
             ${view === "me" && html`<div>
               ${birth.name && !sampleMode && html`<div style=${{ fontSize: 14, color: C.sub, marginBottom: 10 }}>${birth.name} さんの星</div>`}
               ${data.chart && html`<${Signature} chart=${data.chart} />`}
               ${data.chart && html`<${Insight} chart=${data.chart} />`}
+              ${data.chart && html`<${SoulNode} chart=${data.chart} />`}
               ${sec.natal !== false && data.chart && html`<${Section} title="ネイタルチャート（出生図）" color=${C.purple} sub="生まれた瞬間の星空。天体をタップすると、あなたの性格や才能が分かります。" collapsible=${true}>
                 <${Horoscope} chart=${data.chart} />
               <//>`}
