@@ -1233,45 +1233,86 @@
         </div>`;
       }
 
-      // ── 岐路の相談：迷いごと→「動くべきか・いつか」を星と時期から読む（このアプリの核）──
       const CONSULT_CATS = [["💼 仕事・キャリア", 10], ["💞 恋愛・結婚", 7], ["💰 お金・投資", 2], ["🏠 引っ越し・環境", 4], ["🤝 人間関係", 11], ["📚 学び・挑戦", 9], ["🌱 その他・自分のこと", 1]];
-      function Consult({ birth, chart, transit, exits }) {
-        const [cat, setCat] = useState(null);
+      function Consult({ birth, chart, transit, exits, apiKey, context, tone }) {
+        const [cat, setCat] = useState(0);
+        const [q, setQ] = useState("");
+        const [ans, setAns] = useState("");
+        const [busy, setBusy] = useState(false);
+        const [err, setErr] = useState("");
         const sIdx = (l) => Math.floor((((l % 360) + 360) % 360) / 30);
         const ascSign = chart && chart.ascDeg != null ? sIdx(chart.ascDeg) : 0;
-        const result = useMemo(() => {
-          if (cat == null || !chart) return null;
-          const houseNum = CONSULT_CATS[cat][1];
-          const si = (ascSign + houseNum - 1) % 12;
+        const f = useMemo(() => {
+          if (!chart || !chart.lons) return null;
+          const houseNum = CONSULT_CATS[cat][1], si = (ascSign + houseNum - 1) % 12;
           const tH = (n) => (transit && transit.lons && transit.lons[n] != null) ? ((sIdx(transit.lons[n]) - ascSign + 12) % 12) + 1 : null;
           const jup = tH("木星"), sat = tH("土星"), sun = tH("太陽");
-          let verdict, vcolor;
-          if (houseNum === jup) { verdict = `🍀 追い風の時期。広げる・始める・挑戦するのに良いタイミング。${exits && exits.木星 ? `（${exits.木星.ym}ごろまで）` : ""}`; vcolor = C.green; }
-          else if (houseNum === sat) { verdict = `💪 正念場。大きな決断は急がず、準備と基礎固めを。焦りは禁物。${exits && exits.土星 ? `（${exits.土星.ym}ごろまで）` : ""}`; vcolor = C.blue; }
-          else if (houseNum === sun) { verdict = "☀ 今ちょうどスポットが当たる分野。1か月以内に動きを起こしやすい。"; vcolor = C.accent; }
-          else { verdict = "🌗 大きな波は穏やか。外の流れより、あなた自身の意思で決めてよい時期。"; vcolor = C.purple; }
+          const nextJup = (transit && transit.lons && transit.lons.木星 != null) ? nextSignEntry("木星", si, transit.lons.木星) : null;
+          let tone2, label, col;
+          if (houseNum === jup) { tone2 = "go"; label = `追い風（${exits && exits.木星 ? exits.木星.ym + "ごろまで" : "今"}）`; col = C.green; }
+          else if (houseNum === sat) { tone2 = "wait"; label = `正念場（${exits && exits.土星 ? exits.土星.ym + "ごろまで" : ""}）`; col = C.blue; }
+          else if (houseNum === sun) { tone2 = "now"; label = "今月スポット"; col = C.accent; }
+          else { tone2 = "prep"; label = "穏やか（仕込み期）"; col = C.purple; }
+          const sun2 = sIdx(chart.lons.太陽), merc = chart.lons.水星 != null ? sIdx(chart.lons.水星) : sun2;
           const dates = [];
           for (let i = 0; i < 14; i++) { const d = new Date(Date.now() + i * 86400000); dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`); }
           let st = {}; try { st = stancesFor(birth, dates) || {}; } catch {}
           const good = dates.filter((d) => st[d] && st[d].stance === "攻め").slice(0, 3);
-          return { houseNum, si, verdict, vcolor, good };
+          return { houseNum, si, tone2, label, col, nextJup, sun2, merc, good };
         }, [cat, chart && chart.ascDeg]);
         const fmtD = (iso) => { const d = new Date(iso + "T00:00:00"); return `${d.getMonth() + 1}/${d.getDate()}(${WD_JP[d.getDay()]})`; };
+        const goodTxt = () => f.good.length ? f.good.map(fmtD).join("　/　") : "この2週間は“攻め”の日は控えめ。準備・情報集めに。";
+
+        const stanceLine = () => {
+          if (!f) return "";
+          const nj = f.nextJup ? `次の追い風は${f.nextJup.ym}ごろ` : "次の好機を見据えて";
+          if (f.tone2 === "go") return "結論：今は追い風。迷うより、動くなら今のうち。小さく一歩を踏み出して流れに乗って。";
+          if (f.tone2 === "wait") return `結論：今は土台を固める時期。大きな決断は急がず、${nj}に向けて準備と実力づくりを。`;
+          if (f.tone2 === "now") return "結論：今月がチャンス。1か月以内に最初の一歩を起こすと流れに乗れる。";
+          return `結論：外の波は穏やか＝“仕込み”の好機。大勝負は${nj}に取っておき、今は土台づくり・情報集め・小さな試運転を。`;
+        };
+        const detFallback = () => `${stanceLine()}\n\nあなたは太陽${SIGN_INFO[f.sun2][0]}座（${SIGN_INFO[f.sun2][3]}）×水星${SIGN_INFO[f.merc][0]}座（${SIGN_INFO[f.merc][3]}）で判断するタイプ。この分野では「${SIGN_MOVE[f.si][0]}」が活きる一方、「${SIGN_MOVE[f.si][1]}」に注意。\n\n動くなら：${goodTxt()}\n\n最終的に決めるのは、あなた自身です。`;
+
+        const factsText = () => {
+          const nj = f.nextJup ? `${f.nextJup.ym}ごろ` : "不明";
+          return `- 相談分野: ${CONSULT_CATS[cat][0]}（${HOUSE_INFO[f.houseNum - 1][0]}）\n- 今の時期: ${f.label}（${f.tone2 === "go" ? "拡大・挑戦に良い" : f.tone2 === "wait" ? "試練・準備期、大決断は慎重に" : f.tone2 === "now" ? "今月動きやすい" : "穏やか＝仕込み向き"}）\n- 次に追い風(木星)が来る時期: ${nj}\n- この分野でのあなたの傾向: ${SIGN_INFO[f.si][0]}座=${SIGN_MOVE[f.si][0]} / 注意=${SIGN_MOVE[f.si][1]}\n- 決断スタイル: 太陽${SIGN_INFO[f.sun2][0]}座(${SIGN_INFO[f.sun2][3]}) × 水星${SIGN_INFO[f.merc][0]}座(${SIGN_INFO[f.merc][3]})\n- 動きやすい日(2週間): ${f.good.length ? f.good.map(fmtD).join(", ") : "なし（準備向き）"}`;
+        };
+        const run = async () => {
+          setErr("");
+          if (!apiKey) { setAns(detFallback()); return; }
+          setBusy(true); setAns("");
+          try {
+            const sys = `あなたは相談者の専属占術師兼コーチです。下の「占いの根拠(facts)」と「命式」だけに基づき、相談者の悩みに対して【立場を取った具体的な助言】を返してください。曖昧に逃げず、しかし断定しすぎないこと。占い用語は噛み砕く。
+# 構成（この順で、見出しなしの短い段落で）
+1) 結論：今は「動く/待つ/準備する」のどれが得策かを一言で言い切る
+2) 理由：今の時期(facts)と本人の決断スタイル・傾向から3〜4文で
+3) 動くなら：いつ・最初の一歩を具体的に
+最後に「最終的に決めるのはあなた」と一言。深刻な不調や危機を感じる内容なら、専門の相談窓口の利用も勧める。日本語で250〜400字。${tone ? TONE_PROMPTS[tone] || "" : ""}
+# 占いの根拠(facts)
+${factsText()}
+# 相談者の命式
+${context || ""}`;
+            const t = await callGemini(apiKey, sys, [{ role: "user", content: (q.trim() || `${CONSULT_CATS[cat][0]}のことで迷っています`) }]);
+            setAns(t || detFallback());
+          } catch (e) { setErr(String(e.message || e)); setAns(detFallback()); } finally { setBusy(false); }
+        };
+
+        if (!f) return html`<div style=${{ fontSize: 13, color: C.faint }}>計算できませんでした。</div>`;
         return html`<div>
-          <div style=${{ fontSize: 13, color: C.sub, lineHeight: 1.7, marginBottom: 10 }}>いま迷っていることは？ 分野を選ぶと、<b style=${{ color: C.text }}>あなたの星 × 今の時期</b>から「動くべきか・いつ動くか」を読み解きます。</div>
-          <div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-            ${CONSULT_CATS.map((x, i) => { const on = i === cat; return html`<button key=${i} onClick=${() => setCat(i)} style=${{ border: `1px solid ${on ? C.purple : C.line}`, background: on ? C.purple + "22" : C.panel2, color: C.text, borderRadius: 999, padding: "6px 11px", fontSize: 13, cursor: "pointer", fontWeight: on ? 700 : 400 }}>${x[0]}</button>`; })}
+          <div style=${{ fontSize: 13, color: C.sub, lineHeight: 1.7, marginBottom: 10 }}>いま迷っていることを書いて、分野を選んでください。<b style=${{ color: C.text }}>あなたの星 × 今の時期</b>から、動くべきか・いつかを一緒に考えます。</div>
+          <div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+            ${CONSULT_CATS.map((x, i) => { const on = i === cat; return html`<button key=${i} onClick=${() => { setCat(i); setAns(""); }} style=${{ border: `1px solid ${on ? C.purple : C.line}`, background: on ? C.purple + "22" : C.panel2, color: C.text, borderRadius: 999, padding: "6px 11px", fontSize: 13, cursor: "pointer", fontWeight: on ? 700 : 400 }}>${x[0]}</button>`; })}
           </div>
-          ${result && html`<div style=${{ background: C.panel2, border: `1px solid ${result.vcolor}`, borderRadius: 14, padding: 15 }}>
-            <div style=${{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>${CONSULT_CATS[cat][0]} の相談</div>
-            <div style=${{ fontSize: 13.5, lineHeight: 1.9, color: C.text, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div>🕒 <b style=${{ color: result.vcolor }}>今の時期</b>：${result.verdict}</div>
-              <div>🧭 <b>あなたの動き方</b>：${SIGN_INFO[result.si][0]}座タイプ＝${SIGN_MOVE[result.si][0]}</div>
-              <div>⚠️ <b>気をつけること</b>：${SIGN_MOVE[result.si][1]}</div>
-              <div>📅 <b>動くなら良い日（2週間）</b>：${result.good.length ? result.good.map(fmtD).join("　/　") : "“攻め”の日は控えめ。今は整える・準備の時期。"}</div>
-            </div>
-            <div style=${{ fontSize: 12, color: C.faint, marginTop: 10, lineHeight: 1.6 }}>もっと具体的に相談したいときは、下の <b>AIに相談</b> で「${CONSULT_CATS[cat][0].replace(/^.\s?/, "")}のことで迷っている」と話しかけてみてください。最終的に決めるのはあなた自身です。</div>
-          </div>`}
+          <textarea value=${q} onInput=${(e) => setQ(e.target.value)} placeholder="例：今の会社を辞めてフリーになるか迷っています" rows=${2} style=${{ ...inp, resize: "vertical", lineHeight: 1.5 }}></textarea>
+          <button onClick=${run} disabled=${busy} style=${{ ...inp, marginBottom: 12, background: busy ? C.line : C.purple, color: C.onAccent, fontWeight: 700, border: "none", cursor: busy ? "default" : "pointer" }}>${busy ? "占っています…" : apiKey ? "🔮 相談する" : "🔮 相談する（簡易・AIキーで本格鑑定）"}</button>
+          ${err && html`<div style=${{ fontSize: 13, color: C.red, marginBottom: 8 }}>エラー：${err}（簡易結果を表示）</div>`}
+          ${ans && html`<div style=${{ background: `linear-gradient(135deg, ${f.col}1F, ${C.panel})`, border: `1px solid ${f.col}`, borderRadius: 14, padding: 15, marginBottom: 12, whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.9, color: C.text }}>${ans}</div>`}
+          <div style=${{ background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 12, padding: 13, fontSize: 12.5, lineHeight: 1.8, color: C.sub }}>
+            <div style=${{ fontSize: 12, fontWeight: 700, color: C.faint, marginBottom: 4 }}>📊 占いの根拠（自動計算）</div>
+            <div>🕒 今の時期：<b style=${{ color: f.col }}>${f.label}</b></div>
+            <div>🧭 あなたの動き方：${SIGN_INFO[f.si][0]}座＝${SIGN_MOVE[f.si][0]}</div>
+            <div>📅 動きやすい日：${goodTxt()}</div>
+          </div>
         </div>`;
       }
 
@@ -1863,7 +1904,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
 
             ${view === "talk" && html`<div>
               ${data.chart && html`<${Section} title="🧭 迷ったときの相談" color=${C.purple} sub="人生の岐路で「動くべきか・いつか」を、あなたの星と今の時期から。">
-                <${Consult} birth=${birth} chart=${data.chart} transit=${data.transit} exits=${data.exits} />
+                <${Consult} birth=${birth} chart=${data.chart} transit=${data.transit} exits=${data.exits} apiKey=${apiKey} context=${buildOracleContext(data, birth)} tone=${settings.tone} />
               <//>`}
               ${sec.advisor && data.advisor && html`<${Section} title="専属占術師アドバイス" color=${C.accent} sub="あなたの星から、仕事・人間関係・健康・今日の指針を読み解きます。">
                 <${Advisor} adv=${data.advisor} />
