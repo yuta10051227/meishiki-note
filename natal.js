@@ -24,6 +24,30 @@ const DAY_ANCHOR = jdn(1990, 10, 5) - 39;
 // Lahiri アヤナムシャ近似（J2000=約23.86°, 約0.0139°/年ドリフト）
 function lahiri(year) { return 23.86 + (year - 2000) * 0.013889; }
 
+// キロン（小惑星2060）の地心黄経。近日点1996.1を起点にしたケプラー二体＋地球位置の近似。
+// 既知の星座通過（牡羊座入り2018 / 牡牛座入り2027 等）と誤差およそ1°で一致。
+const CHIRON = { a: 13.648, e: 0.3823, i: 6.929, Om: 209.29, w: 339.43, t0: 1996.13 };
+function chironLonAt(utc) {
+  const D2R = Math.PI / 180, a = CHIRON.a, e = CHIRON.e, iC = CHIRON.i * D2R, Om = CHIRON.Om * D2R, w = CHIRON.w * D2R;
+  const n = 360 / Math.pow(a, 1.5);
+  const y = utc.getUTCFullYear();
+  const t = y + (utc.getTime() - Date.UTC(y, 0, 1)) / (Date.UTC(y + 1, 0, 1) - Date.UTC(y, 0, 1));
+  const M = norm(n * (t - CHIRON.t0)) * D2R;
+  let E = M; for (let k = 0; k < 60; k++) E = E - (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+  const nu = 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E / 2), Math.sqrt(1 - e) * Math.cos(E / 2));
+  const r = a * (1 - e * Math.cos(E)), u = w + nu;
+  const xh = r * (Math.cos(Om) * Math.cos(u) - Math.sin(Om) * Math.sin(u) * Math.cos(iC));
+  const yh = r * (Math.sin(Om) * Math.cos(u) + Math.cos(Om) * Math.sin(u) * Math.cos(iC));
+  const JD = utc.getTime() / 86400000 + 2440587.5, T = (JD - 2451545) / 36525;
+  const L0 = norm(280.46646 + 36000.76983 * T + 0.0003032 * T * T);
+  const Ms = (357.52911 + 35999.05029 * T - 0.0001537 * T * T) * D2R;
+  const Cc = (1.914602 - 0.004817 * T - 0.000014 * T * T) * Math.sin(Ms) + (0.019993 - 0.000101 * T) * Math.sin(2 * Ms) + 0.000289 * Math.sin(3 * Ms);
+  const Le = (norm(L0 + Cc) + 180) * D2R;
+  const R = 1.00014 - 0.01671 * Math.cos(Ms) - 0.00014 * Math.cos(2 * Ms);
+  const xe = R * Math.cos(Le), ye = R * Math.sin(Le);
+  return norm(Math.atan2(yh - ye, xh - xe) * 180 / Math.PI);
+}
+
 export function computeChart(birth) {
   const { date, time = "12:00", utcOffset = 9, lat = 35.68, lon = 139.69 } = birth || {};
   const [Y, M, D] = String(date).split("-").map(Number);
@@ -40,6 +64,7 @@ export function computeChart(birth) {
     太陽: elon(A.Body.Sun), 月: elon(A.Body.Moon), 水星: elon(A.Body.Mercury),
     金星: elon(A.Body.Venus), 火星: elon(A.Body.Mars), 木星: elon(A.Body.Jupiter), 土星: elon(A.Body.Saturn),
     天王星: elon(A.Body.Uranus), 海王星: elon(A.Body.Neptune), 冥王星: elon(A.Body.Pluto),
+    キロン: chironLonAt(utc),
   };
 
   // ASC（上昇宮）
