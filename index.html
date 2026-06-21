@@ -294,6 +294,22 @@
 
       // Google Gemini API をブラウザから直接呼ぶ（無料枠・自分専用前提）
       const GEMINI_MODEL = "gemini-2.5-flash";
+      // ▼ ここに Cloudflare Worker（worker.js）のURLを貼ると、ユーザーはAPIキー無しでAI相談が使えます。
+      //   空のままなら従来どおり「各自のAPIキー」方式。例: "https://meishiki-ai.xxxx.workers.dev"
+      const AI_PROXY = "";
+      // プロキシがあれば運営キーで（ユーザーはキー不要）、無ければ各自のキーで呼ぶ統一窓口。
+      async function callAI(system, messages, apiKey) {
+        if (AI_PROXY) {
+          const res = await fetch(AI_PROXY, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ system, messages }) });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data || data.error) throw new Error((data && data.error) || `エラー (HTTP ${res.status})`);
+          if (!data.text) throw new Error("回答が空でした");
+          return data.text;
+        }
+        return callGemini(apiKey, system, messages);
+      }
+      // AIが使える状態か（プロキシ設定済み or 各自キーあり）
+      const aiReady = (apiKey) => !!AI_PROXY || !!apiKey;
       async function callGemini(apiKey, system, messages) {
         // Gemini のロールは user / model（assistant→model に変換）
         const contents = messages.map((m) => ({
@@ -1279,7 +1295,7 @@
         };
         const run = async () => {
           setErr("");
-          if (!apiKey) { setAns(detFallback()); return; }
+          if (!aiReady(apiKey)) { setAns(detFallback()); return; }
           setBusy(true); setAns("");
           try {
             const sys = `あなたは相談者の専属占術師兼コーチです。下の「占いの根拠(facts)」と「命式」だけに基づき、相談者の悩みに対して【立場を取った具体的な助言】を返してください。曖昧に逃げず、しかし断定しすぎないこと。占い用語は噛み砕く。
@@ -1292,7 +1308,7 @@
 ${factsText()}
 # 相談者の命式
 ${context || ""}`;
-            const t = await callGemini(apiKey, sys, [{ role: "user", content: (q.trim() || `${CONSULT_CATS[cat][0]}のことで迷っています`) }]);
+            const t = await callAI(sys, [{ role: "user", content: (q.trim() || `${CONSULT_CATS[cat][0]}のことで迷っています`) }], apiKey);
             setAns(t || detFallback());
           } catch (e) { setErr(String(e.message || e)); setAns(detFallback()); } finally { setBusy(false); }
         };
@@ -1304,7 +1320,7 @@ ${context || ""}`;
             ${CONSULT_CATS.map((x, i) => { const on = i === cat; return html`<button key=${i} onClick=${() => { setCat(i); setAns(""); }} style=${{ border: `1px solid ${on ? C.purple : C.line}`, background: on ? C.purple + "22" : C.panel2, color: C.text, borderRadius: 999, padding: "6px 11px", fontSize: 13, cursor: "pointer", fontWeight: on ? 700 : 400 }}>${x[0]}</button>`; })}
           </div>
           <textarea value=${q} onInput=${(e) => setQ(e.target.value)} placeholder="例：今の会社を辞めてフリーになるか迷っています" rows=${2} style=${{ ...inp, resize: "vertical", lineHeight: 1.5 }}></textarea>
-          <button onClick=${run} disabled=${busy} style=${{ ...inp, marginBottom: 12, background: busy ? C.line : C.purple, color: C.onAccent, fontWeight: 700, border: "none", cursor: busy ? "default" : "pointer" }}>${busy ? "占っています…" : apiKey ? "🔮 相談する" : "🔮 相談する（簡易・AIキーで本格鑑定）"}</button>
+          <button onClick=${run} disabled=${busy} style=${{ ...inp, marginBottom: 12, background: busy ? C.line : C.purple, color: C.onAccent, fontWeight: 700, border: "none", cursor: busy ? "default" : "pointer" }}>${busy ? "占っています…" : aiReady(apiKey) ? "🔮 相談する" : "🔮 相談する（簡易版・AI設定で本格鑑定）"}</button>
           ${err && html`<div style=${{ fontSize: 13, color: C.red, marginBottom: 8 }}>エラー：${err}（簡易結果を表示）</div>`}
           ${ans && html`<div style=${{ background: `linear-gradient(135deg, ${f.col}1F, ${C.panel})`, border: `1px solid ${f.col}`, borderRadius: 14, padding: 15, marginBottom: 12, whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.9, color: C.text }}>${ans}</div>`}
           <div style=${{ background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 12, padding: 13, fontSize: 12.5, lineHeight: 1.8, color: C.sub }}>
@@ -1419,15 +1435,15 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
           const next = [...msgs, { role: "user", content: q }];
           setMsgs(next); setBusy(true);
           try {
-            const reply = await callGemini(apiKey, system, next);
+            const reply = await callAI(system, next, apiKey);
             setMsgs([...next, { role: "assistant", content: reply || "（回答が空でした）" }]);
           } catch (e) {
             setErr(String(e.message || e));
           } finally { setBusy(false); }
         };
 
-        // APIキー未設定：入力フォームを出す
-        if (!apiKey) {
+        // APIキー未設定：入力フォームを出す（ただしプロキシ設定済みならキー不要でそのまま使える）
+        if (!aiReady(apiKey)) {
           return html`<div>
             <div style=${{ fontSize: 13, color: C.sub, lineHeight: 1.7, marginBottom: 10 }}>
               あなたの命式を踏まえて、占い師に直接相談できます。利用には <b style=${{ color: C.text }}>Google Gemini の APIキー</b> が必要です（${"https://aistudio.google.com/apikey"} で無料取得・カード不要）。
@@ -1590,7 +1606,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         const tip = dailyTip(todayISO, seed);
 
         // AI「今日の一言」：鍵があり設定ONなら、1日1回だけ生成してキャッシュ
-        const aiOn = !!apiKey && dailyOracle !== false;
+        const aiOn = aiReady(apiKey) && dailyOracle !== false;
         const [aiText, setAiText] = useState(() => (aiOn ? getDailyAI(seed, todayISO) : ""));
         const [aiBusy, setAiBusy] = useState(false);
         const genDaily = async (force) => {
@@ -1600,7 +1616,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
           try {
             const sys = `あなたは相談者の専属占術師です。下の命式を踏まえ、今日この人に向けた“今日だけの具体的な一言”を、前向きに、的を1つに絞って日本語2文以内で。占い用語は噛み砕く。挨拶や前置きは不要。\n# 命式\n${context || ""}`;
             const user = `今日は${dateLabel}。日の干支は${d.ganzhi}（重なる星：${d.star}／気のスタンス：${d.stance}）。この人の今日の過ごし方を2文以内で。`;
-            const t = await callGemini(apiKey, sys, [{ role: "user", content: user }]);
+            const t = await callAI(sys, [{ role: "user", content: user }], apiKey);
             if (t) { setAiText(t); setDailyAI(seed, todayISO, t); }
           } catch (e) { /* 失敗時は決定論ヒントで代替 */ } finally { setAiBusy(false); }
         };
