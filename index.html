@@ -54,13 +54,13 @@
       const THEMES = {
         dark: {
           bg: "#0F1115", panel: "#171A21", panel2: "#1E222B", line: "#2A2F3A",
-          text: "#E8EAED", sub: "#AAB1BC", faint: "#949BA6",
+          text: "#E8EAED", sub: "#B4BBC6", faint: "#A6ADB8",
           purple: "#9B8CFF", green: "#3FB984", blue: "#5B8DEF", accent: "#C9A227", red: "#E2554B",
           onAccent: "#0B0D11",
         },
         light: {
           bg: "#F4F6F9", panel: "#FFFFFF", panel2: "#EEF1F5", line: "#D7DCE3",
-          text: "#1B1F26", sub: "#4A5260", faint: "#6A7280",
+          text: "#1B1F26", sub: "#414956", faint: "#586071",
           purple: "#6C5CE7", green: "#1E9E6A", blue: "#2F6FE0", accent: "#B8860B", red: "#D23B30",
           onAccent: "#FFFFFF",
         },
@@ -354,10 +354,10 @@
         const show = open || !collapsible;
         return html`<div style=${card}>
           <div onClick=${collapsible ? () => setOpen(!open) : null} style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: collapsible ? "pointer" : "default", marginBottom: show ? (sub ? 2 : 10) : 0 }}>
-            <span style=${{ fontSize: 15, fontWeight: 700, color: color || C.text }}>${title}</span>
-            ${collapsible && html`<span style=${{ fontSize: 12, color: C.sub }}>${open ? "閉じる ▲" : "開く ▼"}</span>`}
+            <span style=${{ fontSize: 16.5, fontWeight: 800, color: color || C.text, lineHeight: 1.4 }}>${title}</span>
+            ${collapsible && html`<span style=${{ fontSize: 12.5, color: C.sub, whiteSpace: "nowrap", marginLeft: 8 }}>${open ? "閉じる ▲" : "開く ▼"}</span>`}
           </div>
-          ${show && sub && html`<div style=${{ fontSize: 12, color: C.faint, marginBottom: 10 }}>${sub}</div>`}
+          ${show && sub && html`<div style=${{ fontSize: 13, color: C.sub, marginBottom: 12, lineHeight: 1.65 }}>${sub}</div>`}
           ${show && children}
         </div>`;
       }
@@ -1856,8 +1856,8 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             ${sampleMode && html`<div style=${{ background: C.purple + "1A", border: `1px solid ${C.purple}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12, fontSize: 13, color: C.text, lineHeight: 1.6 }}>
               👀 これは<b>サンプル表示</b>です。<button onClick=${startNew} style=${{ background: C.purple, color: C.onAccent, border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginLeft: 4 }}>自分の生年月日で見る</button>
             </div>`}
-            <div style=${{ position: "sticky", top: 0, zIndex: 5, background: C.bg, display: "flex", gap: 2, padding: "6px 0 8px", marginBottom: 8, borderBottom: `1px solid ${C.line}`, overflowX: "auto" }}>
-              ${[["today", "🌙 今日"], ["me", "✦ わたし"], ["fortune", "🔮 運勢"], ["love", "💞 恋愛"], ["talk", "🧭 相談"]].map(([k, label]) => { const on = view === k; return html`<button key=${k} onClick=${() => setView(k)} style=${{ flex: "1 0 auto", whiteSpace: "nowrap", border: "none", background: "none", color: on ? C.purple : C.sub, fontSize: 14, fontWeight: on ? 700 : 500, padding: "8px 12px", borderBottom: `2px solid ${on ? C.purple : "transparent"}`, cursor: "pointer" }}>${label}</button>`; })}
+            <div style=${{ position: "sticky", top: 0, zIndex: 5, background: C.bg, display: "flex", gap: 3, padding: "8px 0 9px", marginBottom: 10, borderBottom: `1px solid ${C.line}`, overflowX: "auto" }}>
+              ${[["today", "🌙 今日"], ["me", "✦ わたし"], ["fortune", "🔮 運勢"], ["love", "💞 恋愛"], ["talk", "🧭 相談"]].map(([k, label]) => { const on = view === k; return html`<button key=${k} onClick=${() => setView(k)} style=${{ flex: "1 0 auto", whiteSpace: "nowrap", border: "none", background: on ? C.purple + "1F" : "none", color: on ? C.purple : C.sub, fontSize: 15, fontWeight: on ? 800 : 600, padding: "10px 13px", borderBottom: `2.5px solid ${on ? C.purple : "transparent"}`, borderRadius: "9px 9px 0 0", cursor: "pointer" }}>${label}</button>`; })}
             </div>
 
             ${view === "today" && html`<div>
