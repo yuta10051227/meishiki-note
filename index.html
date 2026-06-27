@@ -133,6 +133,43 @@
       const saveKey = (k) => { try { localStorage.setItem(KEY_STORE, k); } catch {} };
       const clearKey = () => { try { localStorage.removeItem(KEY_STORE); } catch {} };
 
+      // ── 課金（年額サブスク・7日トライアル）＆ コホート計測（S1：観測の土台）──
+      // すべて空＝OFF（＝全機能開放・現状のまま）。Stripe等を設定した瞬間に有効化される。
+      const BILLING = {
+        checkoutUrl: "", // Stripe Checkout / Payment Link（subscription＋7日trial）。client_reference_id を自動付与。
+        portalUrl: "",   // Stripe Customer Portal（解約1タップ）のURL
+        api: "",         // 計測＆権利確認API（worker.js のベースURL）。空なら計測はローカルのみ＆全機能開放。
+        trialDays: 7,
+      };
+      const _apiBase = () => (BILLING.api || "").replace(/\/$/, "");
+      const INSTALL_STORE = "meishiki-note:install";
+      const getInstallId = () => {
+        try { let id = localStorage.getItem(INSTALL_STORE); if (!id) { id = "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem(INSTALL_STORE, id); } return id; } catch { return "anon"; }
+      };
+      const checkoutHref = () => { const u = BILLING.checkoutUrl; if (!u) return "#"; return u + (u.includes("?") ? "&" : "?") + "client_reference_id=" + encodeURIComponent(getInstallId()); };
+      // コホート計測：イベントをAPIへ送信（任意）＋ローカルにも残す（バックエンド前でも検証可能）
+      const track = (name) => {
+        try { const b = _apiBase(); if (b) { const body = JSON.stringify({ id: getInstallId(), name, t: Date.now() }); if (navigator.sendBeacon) navigator.sendBeacon(b + "/event", body); else fetch(b + "/event", { method: "POST", body, keepalive: true }).catch(() => {}); } } catch {}
+        try { const k = "meishiki-note:events"; const a = JSON.parse(localStorage.getItem(k) || "[]"); a.push({ name, t: Date.now() }); localStorage.setItem(k, JSON.stringify(a.slice(-300))); } catch {}
+      };
+      const ENT_STORE = "meishiki-note:entitlement";
+      const loadEnt = () => { try { return JSON.parse(localStorage.getItem(ENT_STORE) || "null"); } catch { return null; } };
+      const saveEnt = (e) => { try { localStorage.setItem(ENT_STORE, JSON.stringify(e)); } catch {} };
+      // 権利確認：サーバに購読状態を問い合わせ。OFF時は常に active 扱い（＝現状維持で全機能開放）。
+      const verifyEntitlement = async () => {
+        if (!BILLING.api) return { active: true, status: "open" };
+        const id = getInstallId();
+        try {
+          const r = await fetch(_apiBase() + "/entitlement?id=" + encodeURIComponent(id), { cache: "no-store" });
+          const d = await r.json();
+          const prev = loadEnt();
+          const e = { active: !!d.active, status: d.status || "", until: d.currentPeriodEnd || 0, checkedAt: Date.now() };
+          saveEnt(e);
+          if (e.active && !(prev && prev.active)) track("activated");
+          return e;
+        } catch { return loadEnt() || { active: false, status: "unknown" }; }
+      };
+
       // ── 連続来訪ストリーク（毎日開く動機づけ・習慣化）──
       const VISIT_STORE = "meishiki-note:visit:v1";
       const ymd = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
@@ -1705,6 +1742,30 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
       // サンプル体験用のプロフィール（保存はしない）
       const SAMPLE_FORM = { name: "サンプル", date: "1990-05-15", time: "12:00", gender: "male", place: "東京", memo: "" };
 
+      // ── 課金UI（BILLING未設定なら何も出ない＝現状維持）──
+      function SubscribeButton({ small }) {
+        if (!BILLING.checkoutUrl) return null;
+        const go = () => { track("checkout_click"); try { location.href = checkoutHref(); } catch {} };
+        return html`<button onClick=${go} style=${{ background: C.accent, color: C.onAccent, border: "none", borderRadius: 999, padding: small ? "8px 16px" : "12px 22px", fontSize: small ? 14 : 16, fontWeight: 700, cursor: "pointer" }}>✨ ${BILLING.trialDays}日間 無料ではじめる</button>`;
+      }
+      function PremiumCTA() {
+        if (!BILLING.checkoutUrl) return null;
+        return html`<div style=${{ ...card, background: `linear-gradient(135deg, ${C.accent}22, ${C.panel})`, border: `1px solid ${C.accent}`, textAlign: "center" }}>
+          <div style=${{ fontSize: 16, fontWeight: 800, color: C.text, marginBottom: 4 }}>✨ プレミアムで“毎日の指針”をフル解放</div>
+          <div style=${{ fontSize: 13, color: C.sub, lineHeight: 1.7, marginBottom: 12 }}>運勢（今日・今月・今年・運命）／占術カレンダー／AI相談・チャット／ネイタル詳細・分野別ガイド。${BILLING.trialDays}日間無料、その後 年¥10,000。いつでも1タップで解約できます。</div>
+          <${SubscribeButton} />
+          ${BILLING.portalUrl && html`<div style=${{ marginTop: 10 }}><a href=${BILLING.portalUrl} style=${{ fontSize: 12, color: C.faint }}>すでに会員の方・解約はこちら</a></div>`}
+        </div>`;
+      }
+      function Locked({ label }) {
+        useEffect(() => { track("paywall_view"); }, []);
+        return html`<div style=${{ ...card, borderStyle: "dashed", textAlign: "center" }}>
+          <div style=${{ fontSize: 15, fontWeight: 700, color: C.text }}>🔒 ${label}</div>
+          <div style=${{ fontSize: 13, color: C.sub, margin: "6px 0 12px" }}>プレミアム会員で解放されます</div>
+          <${SubscribeButton} small=${true} />
+        </div>`;
+      }
+
       function App() {
         // 複数プロフィールを保持。選択中があれば初期値として復元（自動入力＆自動鑑定）。
         const [store, setStore] = useState(loadStore);
@@ -1723,6 +1784,10 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         const onJournalSave = () => setJv((v) => v + 1);
         const [sampleMode, setSampleMode] = useState(false);
         const [view, setView] = useState("today"); // 画面タブ：今日/わたし/運勢/恋愛/相談
+        const [ent, setEnt] = useState(loadEnt); // 購読権利（OFF時は常にactive扱い）
+        useEffect(() => { track("app_open"); verifyEntitlement().then(setEnt); }, []);
+        const entitled = !BILLING.api || !!(ent && ent.active); // BILLING未設定なら全機能開放（現状維持）
+        const gateP = (node, label) => (entitled ? node : html`<${Locked} label=${label} />`); // 有料機能のゲート
 
         const persist = (next) => { setStore(next); saveStore(next); };
         const onSaveKey = (k) => { saveKey(k); setApiKey(k); };
@@ -1860,6 +1925,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               ${[["today", "🌙 今日"], ["me", "✦ わたし"], ["fortune", "🔮 運勢"], ["love", "💞 恋愛"], ["talk", "🧭 相談"]].map(([k, label]) => { const on = view === k; return html`<button key=${k} onClick=${() => setView(k)} style=${{ flex: "1 0 auto", whiteSpace: "nowrap", border: "none", background: on ? C.purple + "1F" : "none", color: on ? C.purple : C.sub, fontSize: 15, fontWeight: on ? 800 : 600, padding: "10px 13px", borderBottom: `2.5px solid ${on ? C.purple : "transparent"}`, borderRadius: "9px 9px 0 0", cursor: "pointer" }}>${label}</button>`; })}
             </div>
 
+            ${!entitled && html`<${PremiumCTA} />`}
             ${view === "today" && html`<div>
               ${data.un && html`<${TodayHero} key=${`${birth.date}|${birth.time}|${birth.place}|${sampleMode ? "s" : ""}`} un=${data.un} visit=${visit} celebrate=${celebrate} name=${sampleMode ? "" : birth.name} apiKey=${sampleMode ? "" : apiKey} context=${buildOracleContext(data, birth)} birth=${birth} dailyOracle=${settings.dailyOracle} />`}
               ${!birth.timeKnown && html`<div style=${{ fontSize: 13, color: C.accent, background: C.accent + "14", border: `1px solid ${C.accent}55`, borderRadius: 10, padding: "9px 12px", marginBottom: 12, lineHeight: 1.7 }}>
@@ -1883,30 +1949,30 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               ${data.chart && html`<${Signature} chart=${data.chart} />`}
               ${data.chart && html`<${Insight} chart=${data.chart} />`}
               ${data.chart && html`<${SoulNode} chart=${data.chart} />`}
-              ${sec.natal !== false && data.chart && html`<${Section} title="ネイタルチャート（出生図）" color=${C.purple} sub="生まれた瞬間の星空。天体をタップすると、あなたの性格や才能が分かります。" collapsible=${true}>
+              ${sec.natal !== false && data.chart && gateP(html`<${Section} title="ネイタルチャート（出生図）" color=${C.purple} sub="生まれた瞬間の星空。天体をタップすると、あなたの性格や才能が分かります。" collapsible=${true}>
                 <${Horoscope} chart=${data.chart} />
-              <//>`}
-              ${sec.life !== false && data.chart && html`<${Section} title="分野別ガイド（仕事・お金・健康ほか）" color=${C.accent} sub="分野ごとの「活かし方・気をつけること・いい時期」をやさしく。" collapsible=${true}>
+              <//>`, "ネイタルチャート（出生図）")}
+              ${sec.life !== false && data.chart && gateP(html`<${Section} title="分野別ガイド（仕事・お金・健康ほか）" color=${C.accent} sub="分野ごとの「活かし方・気をつけること・いい時期」をやさしく。" collapsible=${true}>
                 <${LifeAreas} chart=${data.chart} transit=${data.transit} exits=${data.exits} />
-              <//>`}
+              <//>`, "分野別ガイド（仕事・お金・健康ほか）")}
               ${sec.jintai && data.detail && html`<${Section} title="算命学・人体星図（東洋の見方）" color=${C.purple} sub="生年月日から出す“心の設計図”。各星をタップで意味が出ます。" collapsible=${true} defaultOpen=${false}>
                 <${Jintai} detail=${data.detail} />
               <//>`}
             </div>`}
 
             ${view === "fortune" && html`<div>
-              ${sec.wforecast !== false && data.chart && data.transit && html`<${Section} title="運勢（今日・今月・今年・運命）" color=${C.green} sub="運行中の星をあなたの出生図に重ねた、日・月・年・運命の流れ。">
+              ${sec.wforecast !== false && data.chart && data.transit && gateP(html`<${Section} title="運勢（今日・今月・今年・運命）" color=${C.green} sub="運行中の星をあなたの出生図に重ねた、日・月・年・運命の流れ。">
                 <${AstroForecast} natal=${data.chart} transit=${data.transit} birth=${birth} exits=${data.exits} />
-              <//>`}
-              ${sec.calendar && data.ten !== undefined && html`<${Section} title="占いカレンダー" color=${C.blue} sub="日ごとの流れ（攻め／労い／整える／守り）と気をつけたい日。日付タップで詳しく。" collapsible=${true} defaultOpen=${false}>
+              <//>`, "運勢（今日・今月・今年・運命）")}
+              ${sec.calendar && data.ten !== undefined && gateP(html`<${Section} title="占いカレンダー" color=${C.blue} sub="日ごとの流れ（攻め／労い／整える／守り）と気をつけたい日。日付タップで詳しく。" collapsible=${true} defaultOpen=${false}>
                 <${Calendar} birth=${birth} ten=${data.ten} onJournalSave=${onJournalSave} />
-              <//>`}
-              ${sec.un && data.un && html`<${Section} title="今日・今月・今年の運氣（東洋の見方）" color=${C.purple} sub="あなたの日干に、今動いている星を重ねた流れ・動き方。" collapsible=${true} defaultOpen=${false}>
+              <//>`, "占いカレンダー")}
+              ${sec.un && data.un && gateP(html`<${Section} title="今日・今月・今年の運氣（東洋の見方）" color=${C.purple} sub="あなたの日干に、今動いている星を重ねた流れ・動き方。" collapsible=${true} defaultOpen=${false}>
                 <${Flow} un=${data.un} />
-              <//>`}
-              ${sec.unsei && (data.ten || data.dai) && html`<${Section} title="天中殺・大運（人生の流れ・東洋）" color=${C.blue} collapsible=${true} defaultOpen=${false}>
+              <//>`, "今日・今月・今年の運氣（東洋の見方）")}
+              ${sec.unsei && (data.ten || data.dai) && gateP(html`<${Section} title="天中殺・大運（人生の流れ・東洋）" color=${C.blue} collapsible=${true} defaultOpen=${false}>
                 <${Unsei} ten=${data.ten} dai=${data.dai} />
-              <//>`}
+              <//>`, "天中殺・大運（人生の流れ・東洋）")}
             </div>`}
 
             ${view === "love" && html`<div>
@@ -1919,15 +1985,15 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             </div>`}
 
             ${view === "talk" && html`<div>
-              ${data.chart && html`<${Section} title="🧭 迷ったときの相談" color=${C.purple} sub="人生の岐路で「動くべきか・いつか」を、あなたの星と今の時期から。">
+              ${data.chart && gateP(html`<${Section} title="🧭 迷ったときの相談" color=${C.purple} sub="人生の岐路で「動くべきか・いつか」を、あなたの星と今の時期から。">
                 <${Consult} birth=${birth} chart=${data.chart} transit=${data.transit} exits=${data.exits} apiKey=${apiKey} context=${buildOracleContext(data, birth)} tone=${settings.tone} />
-              <//>`}
+              <//>`, "迷ったときの相談")}
               ${sec.advisor && data.advisor && html`<${Section} title="専属占術師アドバイス" color=${C.accent} sub="あなたの星から、仕事・人間関係・健康・今日の指針を読み解きます。">
                 <${Advisor} adv=${data.advisor} />
               <//>`}
-              ${sec.chat && html`<${Section} title="AIに相談する（占い師チャット）" color=${C.green} sub="あなたの星を踏まえて、占い師に直接相談できます。※相談時のみ内容を Gemini に送信します。">
+              ${sec.chat && gateP(html`<${Section} title="AIに相談する（占い師チャット）" color=${C.green} sub="あなたの星を踏まえて、占い師に直接相談できます。※相談時のみ内容を Gemini に送信します。">
                 <${Chat} key=${`${birth.date}|${birth.time}|${birth.place}|${editingId || ""}`} apiKey=${apiKey} onSaveKey=${onSaveKey} onClearKey=${onClearKey} context=${buildOracleContext(data, birth)} name=${birth.name} tone=${settings.tone} replyLength=${settings.replyLength} oracleName=${settings.oracleName} />
-              <//>`}
+              <//>`, "AIに相談する（占い師チャット）")}
               ${sec.astro && data.chart && html`<${Section} title="インド占星術・サイデリアル（補助）" color=${C.accent} sub="ナクシャトラやダシャー（インド式の運勢周期）。" collapsible=${true} defaultOpen=${false}>
                 <${AstroSummary} chart=${data.chart} />
               <//>`}
