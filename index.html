@@ -136,17 +136,19 @@
       // ── 課金（年額サブスク・7日トライアル）＆ コホート計測（S1：観測の土台）──
       // すべて空＝OFF（＝全機能開放・現状のまま）。Stripe等を設定した瞬間に有効化される。
       const BILLING = {
-        checkoutUrl: "", // Stripe Checkout / Payment Link（subscription＋7日trial）。client_reference_id を自動付与。
-        portalUrl: "",   // Stripe Customer Portal（解約1タップ）のURL
-        api: "",         // 計測＆権利確認API（worker.js のベースURL）。空なら計測はローカルのみ＆全機能開放。
-        trialDays: 7,
+        mode: "mosh",    // "mosh"（会員コード方式）／ "stripe"（client_reference_idで自動判定）
+        checkoutUrl: "", // MOSH：月額/年額サブスクのページURL（Stripe：Payment Link）
+        portalUrl: "",   // 解約・購読管理ページ（MOSHのマイページ等）のURL
+        api: "",         // worker.js のベースURL。空なら計測ローカルのみ＆全機能開放（現状維持）。
+        ctaLabel: "",    // 購読ボタンの文言（空なら自動）
+        trialDays: 0,    // 無料体験日数（MOSH側で設定した場合の表示用。0なら非表示）
       };
       const _apiBase = () => (BILLING.api || "").replace(/\/$/, "");
       const INSTALL_STORE = "meishiki-note:install";
       const getInstallId = () => {
         try { let id = localStorage.getItem(INSTALL_STORE); if (!id) { id = "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem(INSTALL_STORE, id); } return id; } catch { return "anon"; }
       };
-      const checkoutHref = () => { const u = BILLING.checkoutUrl; if (!u) return "#"; return u + (u.includes("?") ? "&" : "?") + "client_reference_id=" + encodeURIComponent(getInstallId()); };
+      const checkoutHref = () => { const u = BILLING.checkoutUrl; if (!u) return "#"; if (BILLING.mode === "stripe") return u + (u.includes("?") ? "&" : "?") + "client_reference_id=" + encodeURIComponent(getInstallId()); return u; };
       // コホート計測：イベントをAPIへ送信（任意）＋ローカルにも残す（バックエンド前でも検証可能）
       const track = (name) => {
         try { const b = _apiBase(); if (b) { const body = JSON.stringify({ id: getInstallId(), name, t: Date.now() }); if (navigator.sendBeacon) navigator.sendBeacon(b + "/event", body); else fetch(b + "/event", { method: "POST", body, keepalive: true }).catch(() => {}); } } catch {}
@@ -168,6 +170,16 @@
           if (e.active && !(prev && prev.active)) track("activated");
           return e;
         } catch { return loadEnt() || { active: false, status: "unknown" }; }
+      };
+      // 会員コードで解除（MOSHで購読後に届くコードを入力）
+      const redeemCode = async (code) => {
+        if (!BILLING.api) return { active: true };
+        try {
+          const r = await fetch(_apiBase() + "/redeem", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: getInstallId(), code: String(code || "").trim() }) });
+          const d = await r.json();
+          if (d && d.active) { const e = { active: true, status: d.status || "member", checkedAt: Date.now() }; saveEnt(e); return e; }
+          return d || { active: false };
+        } catch { return { active: false, error: "network" }; }
       };
 
       // ── 連続来訪ストリーク（毎日開く動機づけ・習慣化）──
@@ -1743,18 +1755,38 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
       const SAMPLE_FORM = { name: "サンプル", date: "1990-05-15", time: "12:00", gender: "male", place: "東京", memo: "" };
 
       // ── 課金UI（BILLING未設定なら何も出ない＝現状維持）──
+      const subLabel = () => BILLING.ctaLabel || (BILLING.trialDays > 0 ? `✨ ${BILLING.trialDays}日間 無料ではじめる` : (BILLING.mode === "mosh" ? "✨ MOSHで購読する" : "✨ 購読する"));
       function SubscribeButton({ small }) {
         if (!BILLING.checkoutUrl) return null;
         const go = () => { track("checkout_click"); try { location.href = checkoutHref(); } catch {} };
-        return html`<button onClick=${go} style=${{ background: C.accent, color: C.onAccent, border: "none", borderRadius: 999, padding: small ? "8px 16px" : "12px 22px", fontSize: small ? 14 : 16, fontWeight: 700, cursor: "pointer" }}>✨ ${BILLING.trialDays}日間 無料ではじめる</button>`;
+        return html`<button onClick=${go} style=${{ background: C.accent, color: C.onAccent, border: "none", borderRadius: 999, padding: small ? "8px 16px" : "12px 22px", fontSize: small ? 14 : 16, fontWeight: 700, cursor: "pointer" }}>${subLabel()}</button>`;
       }
-      function PremiumCTA() {
-        if (!BILLING.checkoutUrl) return null;
+      // 会員コード入力（MOSHで購読後に届くコードで解除）
+      function UnlockBox({ onActive }) {
+        const [code, setCode] = useState("");
+        const [busy, setBusy] = useState(false);
+        const [err, setErr] = useState("");
+        if (!BILLING.api) return null;
+        const submit = async () => { setBusy(true); setErr(""); const r = await redeemCode(code); setBusy(false); if (r && r.active) { onActive && onActive(r); } else { setErr("コードを確認できませんでした。購読後に届くコードをご確認ください。"); } };
+        return html`<div style=${{ marginTop: 12, textAlign: "left" }}>
+          <div style=${{ fontSize: 12, color: C.sub, marginBottom: 4 }}>購読済みの方：会員コードを入力</div>
+          <div style=${{ display: "flex", gap: 6 }}>
+            <input value=${code} onInput=${(e) => setCode(e.target.value)} placeholder="会員コード" style=${{ ...inp, marginBottom: 0, flex: 1 }} />
+            <button onClick=${submit} disabled=${busy} style=${{ background: C.purple, color: C.onAccent, border: "none", borderRadius: 11, padding: "0 16px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>${busy ? "確認中" : "解除"}</button>
+          </div>
+          ${err && html`<div style=${{ fontSize: 12, color: C.red, marginTop: 6 }}>${err}</div>`}
+        </div>`;
+      }
+      function PremiumCTA({ onActive }) {
+        if (!BILLING.checkoutUrl && !BILLING.api) return null;
+        const trialLine = BILLING.trialDays > 0 ? `${BILLING.trialDays}日間無料、その後 ` : "";
         return html`<div style=${{ ...card, background: `linear-gradient(135deg, ${C.accent}22, ${C.panel})`, border: `1px solid ${C.accent}`, textAlign: "center" }}>
           <div style=${{ fontSize: 16, fontWeight: 800, color: C.text, marginBottom: 4 }}>✨ プレミアムで“毎日の指針”をフル解放</div>
-          <div style=${{ fontSize: 13, color: C.sub, lineHeight: 1.7, marginBottom: 12 }}>運勢（今日・今月・今年・運命）／占術カレンダー／AI相談・チャット／ネイタル詳細・分野別ガイド。${BILLING.trialDays}日間無料、その後 年¥10,000。いつでも1タップで解約できます。</div>
+          <div style=${{ fontSize: 13, color: C.sub, lineHeight: 1.7, marginBottom: 12 }}>運勢（今日・今月・今年・運命）／占術カレンダー／AI相談・チャット／ネイタル詳細・分野別ガイド。${trialLine}年¥10,000。いつでも解約できます。</div>
           <${SubscribeButton} />
-          ${BILLING.portalUrl && html`<div style=${{ marginTop: 10 }}><a href=${BILLING.portalUrl} style=${{ fontSize: 12, color: C.faint }}>すでに会員の方・解約はこちら</a></div>`}
+          ${BILLING.mode === "mosh" && BILLING.checkoutUrl && html`<div style=${{ fontSize: 12, color: C.faint, marginTop: 8, lineHeight: 1.6 }}>MOSHで購読 → 届いた<b>会員コード</b>を下に入力すると解除されます。</div>`}
+          <${UnlockBox} onActive=${onActive} />
+          ${BILLING.portalUrl && html`<div style=${{ marginTop: 10 }}><a href=${BILLING.portalUrl} style=${{ fontSize: 12, color: C.faint }}>解約・購読の管理はこちら</a></div>`}
         </div>`;
       }
       function Locked({ label }) {
@@ -1925,7 +1957,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               ${[["today", "🌙 今日"], ["me", "✦ わたし"], ["fortune", "🔮 運勢"], ["love", "💞 恋愛"], ["talk", "🧭 相談"]].map(([k, label]) => { const on = view === k; return html`<button key=${k} onClick=${() => setView(k)} style=${{ flex: "1 0 auto", whiteSpace: "nowrap", border: "none", background: on ? C.purple + "1F" : "none", color: on ? C.purple : C.sub, fontSize: 15, fontWeight: on ? 800 : 600, padding: "10px 13px", borderBottom: `2.5px solid ${on ? C.purple : "transparent"}`, borderRadius: "9px 9px 0 0", cursor: "pointer" }}>${label}</button>`; })}
             </div>
 
-            ${!entitled && html`<${PremiumCTA} />`}
+            ${!entitled && html`<${PremiumCTA} onActive=${setEnt} />`}
             ${view === "today" && html`<div>
               ${data.un && html`<${TodayHero} key=${`${birth.date}|${birth.time}|${birth.place}|${sampleMode ? "s" : ""}`} un=${data.un} visit=${visit} celebrate=${celebrate} name=${sampleMode ? "" : birth.name} apiKey=${sampleMode ? "" : apiKey} context=${buildOracleContext(data, birth)} birth=${birth} dailyOracle=${settings.dailyOracle} />`}
               ${!birth.timeKnown && html`<div style=${{ fontSize: 13, color: C.accent, background: C.accent + "14", border: `1px solid ${C.accent}55`, borderRadius: 10, padding: "9px 12px", marginBottom: 12, lineHeight: 1.7 }}>

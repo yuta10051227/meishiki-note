@@ -33,6 +33,7 @@ export default {
 
     try {
       if (path === "/event" && req.method === "POST") return await handleEvent(req, env);
+      if (path === "/redeem" && req.method === "POST") return await handleRedeem(req, env);
       if (path === "/entitlement" && req.method === "GET") return await handleEntitlement(url, env);
       if (path === "/stats" && req.method === "GET") return await handleStats(url, env);
       if (path === "/stripe/webhook" && req.method === "POST") return await handleStripeWebhook(req, env);
@@ -101,6 +102,27 @@ async function handleEvent(req, env) {
 async function incr(env, key) {
   const cur = parseInt((await env.KV.get(key)) || "0", 10) || 0;
   await env.KV.put(key, String(cur + 1));
+}
+
+// ── 会員コードで解除（MOSH等：Webhook無しでも購読者を通す）──
+// env.UNLOCK_CODES … 有効な会員コードをカンマ区切りで（例: "HOSHI2026,TSUKI2026"）。
+// MOSHの「購読者限定コンテンツ」にこのコードを記載し、ユーザーがアプリで入力する。
+async function handleRedeem(req, env) {
+  if (!env.KV) return json({ active: false, error: "KV not bound" });
+  let b;
+  try { b = await req.json(); } catch { return json({ active: false }); }
+  const id = String(b.id || "").slice(0, 64);
+  const code = String(b.code || "").trim().slice(0, 64);
+  if (!id || !code) return json({ active: false, status: "missing" });
+  const valid = (env.UNLOCK_CODES || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!valid.length) return json({ active: false, status: "no-codes-configured" });
+  const ok = valid.some((c) => c.toLowerCase() === code.toLowerCase());
+  if (!ok) return json({ active: false, status: "invalid" });
+  const ent = { active: true, status: "member", currentPeriodEnd: 0 };
+  await env.KV.put(`ent:${id}`, JSON.stringify(ent));
+  const day = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  await incr(env, `c:activated:${day}`); await incr(env, `c:activated:total`);
+  return json(ent);
 }
 
 // ── 購読権利の確認 ──
