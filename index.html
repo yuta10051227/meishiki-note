@@ -20,6 +20,12 @@
       button { -webkit-tap-highlight-color: transparent; }
       #root:empty::after { content: "読み込み中…"; display: grid; place-items: center; height: 100%; color: #9AA1AC; font-size: 14px; }
       input, select, button { font-family: inherit; }
+      /* マイクロインタラクション：押下の手応え＋スレッドの出現アニメ（TimeTree風の心地よさ） */
+      .tap { transition: transform .08s ease, opacity .12s ease; }
+      .tap:active { transform: scale(.95); }
+      @keyframes tt-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+      .tt-in { animation: tt-in .28s ease both; }
+      @media (prefers-reduced-motion: reduce) { .tap, .tt-in { transition: none; animation: none; } }
     </style>
     <script>
       // 起動エラーを画面に出す（白画面防止）
@@ -154,6 +160,8 @@
         try { const b = _apiBase(); if (b) { const body = JSON.stringify({ id: getInstallId(), name, t: Date.now() }); if (navigator.sendBeacon) navigator.sendBeacon(b + "/event", body); else fetch(b + "/event", { method: "POST", body, keepalive: true }).catch(() => {}); } } catch {}
         try { const k = "meishiki-note:events"; const a = JSON.parse(localStorage.getItem(k) || "[]"); a.push({ name, t: Date.now() }); localStorage.setItem(k, JSON.stringify(a.slice(-300))); } catch {}
       };
+      // 触覚フィードバック（対応端末＝主にAndroid。iOS Safariは非対応のため視覚アニメで代替）
+      const haptic = (ms) => { try { if (navigator.vibrate) navigator.vibrate(ms || 8); } catch {} };
       const ENT_STORE = "meishiki-note:entitlement";
       const loadEnt = () => { try { return JSON.parse(localStorage.getItem(ENT_STORE) || "null"); } catch { return null; } };
       const saveEnt = (e) => { try { localStorage.setItem(ENT_STORE, JSON.stringify(e)); } catch {} };
@@ -1597,11 +1605,45 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
           <div style=${{ display: "flex", gap: 6, marginBottom: 8 }}>
             ${MOODS.map(([m, e]) => {
               const on = mood === m;
-              return html`<button key=${m} onClick=${() => { setMood(m); save(m, note); }} style=${{ flex: 1, fontSize: 22, padding: "6px 0", borderRadius: 10, cursor: "pointer", border: `1px solid ${on ? C.purple : C.line}`, background: on ? C.purple + "22" : C.panel2, opacity: !mood || on ? 1 : 0.55 }}>${e}</button>`;
+              return html`<button key=${m} className="tap" onClick=${() => { haptic(); setMood(m); save(m, note); }} style=${{ flex: 1, fontSize: 22, padding: "6px 0", borderRadius: 10, cursor: "pointer", border: `1px solid ${on ? C.purple : C.line}`, background: on ? C.purple + "22" : C.panel2, opacity: !mood || on ? 1 : 0.55 }}>${e}</button>`;
             })}
           </div>
           <input value=${note} onInput=${(e) => setNote(e.target.value)} onBlur=${() => { if (mood || note.trim()) save(mood, note); }} placeholder=${placeholder || "ひとこと（任意）：今日の出来事・気分"} style=${{ ...inp, marginBottom: 0 }} />
           ${saved && html`<div style=${{ fontSize: 12, color: C.green, marginTop: 6 }}>記録しました ✓</div>`}
+        </div>`;
+      }
+
+      // ── 今日のスレッド（TimeTree式：日付という箱に「運氣＋リアクション＋ひとこと＋ふり返り」を1本化）──
+      function TodayThread({ birth, jv, onSaved }) {
+        const todayISO = new Date().toISOString().slice(0, 10);
+        const j = loadJournal();
+        const past = Object.keys(j).filter((d) => d !== todayISO).sort().reverse().slice(0, 6);
+        const stanceOf = (iso) => { try { const u = sanmeiUn(birth, iso); return u && u.day ? u.day : null; } catch { return null; } };
+        return html`<div style=${{ ...card }}>
+          <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+            <span style=${{ fontSize: 16, fontWeight: 800, color: C.green }}>📔 今日のスレッド</span>
+            <span style=${{ fontSize: 12, color: C.faint }}>これまで ${journalCount()}日ぶん</span>
+          </div>
+          <div style=${{ fontSize: 13, color: C.sub, marginBottom: 10, lineHeight: 1.6 }}>今日の気分にリアクション＋ひとこと。続けるほど“あなたの記録”が育ちます。</div>
+          <${MoodPicker} key=${`today|${jv}`} dateISO=${todayISO} onSaved=${onSaved} />
+          ${past.length > 0 && html`<div style=${{ marginTop: 14, borderTop: `1px solid ${C.line}`, paddingTop: 12 }}>
+            <div style=${{ fontSize: 12, color: C.faint, marginBottom: 8 }}>これまでのふり返り</div>
+            <div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
+              ${past.map((iso) => {
+                const e = j[iso]; const st = stanceOf(iso);
+                const col = st ? stanceColor(st.stance) : C.line;
+                const dt = new Date(iso + "T00:00:00");
+                const lbl = `${dt.getMonth() + 1}/${dt.getDate()}(${WD_JP[dt.getDay()]})`;
+                return html`<div key=${iso} className="tt-in" style=${{ display: "flex", gap: 10, alignItems: "flex-start", background: C.panel2, border: `1px solid ${C.line}`, borderLeft: `3px solid ${col}`, borderRadius: 10, padding: "8px 11px" }}>
+                  <div style=${{ fontSize: 18, lineHeight: 1.4 }}>${e.mood ? moodEmoji(e.mood) : "📝"}</div>
+                  <div style=${{ flex: 1, minWidth: 0 }}>
+                    <div style=${{ fontSize: 11.5, color: C.faint, marginBottom: 2 }}>${lbl}${st ? ` ・ ${st.emoji || stanceEmoji(st.stance)} ${st.stance}` : ""}</div>
+                    ${e.note ? html`<div style=${{ fontSize: 13.5, color: C.text, lineHeight: 1.6, wordBreak: "break-word" }}>${e.note}</div>` : html`<div style=${{ fontSize: 13, color: C.faint }}>（気分のみ）</div>`}
+                  </div>
+                </div>`;
+              })}
+            </div>
+          </div>`}
         </div>`;
       }
 
@@ -1954,7 +1996,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               👀 これは<b>サンプル表示</b>です。<button onClick=${startNew} style=${{ background: C.purple, color: C.onAccent, border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginLeft: 4 }}>自分の生年月日で見る</button>
             </div>`}
             <div style=${{ position: "sticky", top: 0, zIndex: 5, background: C.bg, display: "flex", gap: 3, padding: "8px 0 9px", marginBottom: 10, borderBottom: `1px solid ${C.line}`, overflowX: "auto" }}>
-              ${[["today", "🌙 今日"], ["me", "✦ わたし"], ["fortune", "🔮 運勢"], ["love", "💞 恋愛"], ["talk", "🧭 相談"]].map(([k, label]) => { const on = view === k; return html`<button key=${k} onClick=${() => setView(k)} style=${{ flex: "1 0 auto", whiteSpace: "nowrap", border: "none", background: on ? C.purple + "1F" : "none", color: on ? C.purple : C.sub, fontSize: 15, fontWeight: on ? 800 : 600, padding: "10px 13px", borderBottom: `2.5px solid ${on ? C.purple : "transparent"}`, borderRadius: "9px 9px 0 0", cursor: "pointer" }}>${label}</button>`; })}
+              ${[["today", "🌙 今日"], ["me", "✦ わたし"], ["fortune", "🔮 運勢"], ["love", "💞 恋愛"], ["talk", "🧭 相談"]].map(([k, label]) => { const on = view === k; return html`<button key=${k} className="tap" onClick=${() => { haptic(); setView(k); }} style=${{ flex: "1 0 auto", whiteSpace: "nowrap", border: "none", background: on ? C.purple + "1F" : "none", color: on ? C.purple : C.sub, fontSize: 15, fontWeight: on ? 800 : 600, padding: "10px 13px", borderBottom: `2.5px solid ${on ? C.purple : "transparent"}`, borderRadius: "9px 9px 0 0", cursor: "pointer" }}>${label}</button>`; })}
             </div>
 
             ${!entitled && html`<${PremiumCTA} onActive=${setEnt} />`}
@@ -1966,14 +2008,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               ${sec.week !== false && data.chart && html`<${Section} title="今週のハイライト" color=${C.green} sub="運行中の月があなたの星を巡る7日間。好機の日・要注意の日をひと目で。">
                 <${WeekHighlight} natal=${data.chart} birth=${birth} />
               <//>`}
-              ${!sampleMode && html`<div style=${{ ...card }}>
-                <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                  <span style=${{ fontSize: 16, fontWeight: 700, color: C.green }}>📔 今日の記録</span>
-                  <span style=${{ fontSize: 12, color: C.faint }}>これまで ${journalCount()}日ぶん</span>
-                </div>
-                <div style=${{ fontSize: 13, color: C.faint, marginBottom: 8 }}>今日の気分とひとことを残すと、カレンダーに記録が貯まります。</div>
-                <${MoodPicker} key=${`today|${jv}`} dateISO=${new Date().toISOString().slice(0, 10)} onSaved=${onJournalSave} />
-              </div>`}
+              ${!sampleMode && html`<${TodayThread} birth=${birth} jv=${jv} onSaved=${onJournalSave} />`}
               ${!sampleMode && data.chart && html`<${Coaching} natal=${data.chart} transit=${data.transit} />`}
             </div>`}
             ${view === "me" && html`<div>
