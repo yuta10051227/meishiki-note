@@ -239,6 +239,40 @@
       const MOODS = [[1, "😣"], [2, "😕"], [3, "😐"], [4, "🙂"], [5, "😄"]];
       const moodEmoji = (m) => { const f = MOODS.find((x) => x[0] === m); return f ? f[1] : ""; };
 
+      // ── バックアップ（書き出し/読み込み）：localStorage全滅（端末変更・履歴削除）への保険 ──
+      const BACKUP_PREFIX = "meishiki-note:";
+      const exportBackup = () => {
+        try {
+          const data = {};
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith(BACKUP_PREFIX)) data[k] = localStorage.getItem(k);
+          }
+          const blob = new Blob([JSON.stringify({ app: "meishiki-note", version: 1, exportedAt: new Date().toISOString(), data }, null, 2)], { type: "application/json" });
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = `命式ノート_バックアップ_${ymd(new Date())}.json`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        } catch (e) { alert("書き出しに失敗しました：" + e.message); }
+      };
+      const importBackup = (file) => {
+        if (!file) return;
+        const r = new FileReader();
+        r.onload = () => {
+          try {
+            const o = JSON.parse(String(r.result || ""));
+            if (!o || o.app !== "meishiki-note" || !o.data) { alert("命式ノートのバックアップファイルではないようです"); return; }
+            const n = Object.keys(o.data).length;
+            if (!confirm(`バックアップ（${n}項目）を読み込みます。現在のデータは上書きされます。よろしいですか？`)) return;
+            Object.entries(o.data).forEach(([k, v]) => { if (k.startsWith(BACKUP_PREFIX) && typeof v === "string") localStorage.setItem(k, v); });
+            alert("読み込みました。画面を更新します。");
+            location.reload();
+          } catch (e) { alert("読み込みに失敗しました：" + e.message); }
+        };
+        r.readAsText(file);
+      };
+
       // ── 週次コーチング（運勢に基づく問い→宣言→達成。行動変容を促す）──
       const COACH_STORE = "meishiki-note:coach:v1";
       const mondayKey = () => { const d = new Date(); const off = (d.getDay() + 6) % 7; d.setDate(d.getDate() - off); return ymd(d); };
@@ -1589,6 +1623,15 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
                 return html`<button key=${k} onClick=${() => setSection(k, !on)} style=${{ border: `1px solid ${on ? C.green : C.line}`, background: on ? C.green + "22" : C.panel2, color: on ? C.green : C.faint, borderRadius: 999, padding: "5px 11px", fontSize: 12, cursor: "pointer" }}>${on ? "✓ " : ""}${label}</button>`;
               })}
             </div>
+            <div style=${{ borderTop: `1px solid ${C.line}`, marginTop: 14, paddingTop: 12 }}>
+              <div style=${{ fontSize: 12, color: C.sub, marginBottom: 6 }}>データのバックアップ<br /><span style=${{ fontSize: 11, color: C.faint }}>プロフィール・毎日の記録などをファイルに保存／別端末で復元できます（端末内データのため、消える前の保存をおすすめします）</span></div>
+              <div style=${{ display: "flex", gap: 8 }}>
+                <button className="tap" onClick=${exportBackup} style=${{ flex: 1, border: `1px solid ${C.blue}`, background: C.blue + "18", color: C.blue, borderRadius: 10, padding: "10px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>⬇️ 書き出す</button>
+                <label className="tap" style=${{ flex: 1, border: `1px solid ${C.line}`, background: C.panel2, color: C.text, borderRadius: 10, padding: "10px", fontSize: 13, fontWeight: 700, cursor: "pointer", textAlign: "center" }}>
+                  ⬆️ 読み込む<input type="file" accept=".json,application/json" onChange=${(e) => importBackup(e.target.files && e.target.files[0])} style=${{ display: "none" }} />
+                </label>
+              </div>
+            </div>
             <div style=${{ fontSize: 11, color: C.faint, marginTop: 10, lineHeight: 1.6 }}>設定はこの端末に保存されます。占い師の名前・口調・回答の長さは AI相談に反映されます。</div>
           </div>`}
         </div>`;
@@ -1615,7 +1658,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
 
       // ── 今日のスレッド（TimeTree式：日付という箱に「運氣＋リアクション＋ひとこと＋ふり返り」を1本化）──
       function TodayThread({ birth, jv, onSaved }) {
-        const todayISO = new Date().toISOString().slice(0, 10);
+        const todayISO = ymd(new Date());
         const j = loadJournal();
         const past = Object.keys(j).filter((d) => d !== todayISO).sort().reverse().slice(0, 6);
         const stanceOf = (iso) => { try { const u = sanmeiUn(birth, iso); return u && u.day ? u.day : null; } catch { return null; } };
@@ -1692,7 +1735,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         const [msg, setMsg] = useState("");
         const now = new Date();
         const dateLabel = `${now.getMonth() + 1}月${now.getDate()}日(${WD_JP[now.getDay()]})`;
-        const todayISO = now.toISOString().slice(0, 10);
+        const todayISO = ymd(now);
         const seed = birth ? `${birth.date}|${birth.time}|${birth.place}` : "";
         const tip = dailyTip(todayISO, seed);
 
@@ -1860,6 +1903,15 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         const [view, setView] = useState("today"); // 画面タブ：今日/わたし/運勢/恋愛/相談
         const [ent, setEnt] = useState(loadEnt); // 購読権利（OFF時は常にactive扱い）
         useEffect(() => { track("app_open"); verifyEntitlement().then(setEnt); }, []);
+        // 「今日」はローカル日付で管理し、日付が変わったら（開きっぱなし・翌朝再表示でも）自動で今日の運勢に切り替える
+        const [todayKey, setTodayKey] = useState(() => ymd(new Date()));
+        useEffect(() => {
+          const check = () => { const t = ymd(new Date()); setTodayKey((prev) => (prev === t ? prev : t)); };
+          document.addEventListener("visibilitychange", check);
+          window.addEventListener("focus", check);
+          const iv = setInterval(check, 60000);
+          return () => { document.removeEventListener("visibilitychange", check); window.removeEventListener("focus", check); clearInterval(iv); };
+        }, []);
         const entitled = !BILLING.api || !!(ent && ent.active); // BILLING未設定なら全機能開放（現状維持）
         const gateP = (node, label) => (entitled ? node : html`<${Locked} label=${label} />`); // 有料機能のゲート
 
@@ -1906,7 +1958,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         const data = useMemo(() => {
           if (!birth) return null;
           try {
-            const today = new Date().toISOString().slice(0, 10);
+            const today = todayKey; // ローカル日付（UTCずれ・日付またぎ対策済み）
             const transit = computeChart({ date: today, time: "12:00", lat: birth.lat, lon: birth.lon, utcOffset: birth.utcOffset });
             let exits = null;
             try {
@@ -1927,7 +1979,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               advisor: advisor(birth, today),
             };
           } catch (e) { return { error: String(e.message || e) }; }
-        }, [birth && birth.date, birth && birth.time, birth && birth.gender, birth && birth.place]);
+        }, [birth && birth.date, birth && birth.time, birth && birth.gender, birth && birth.place, todayKey]);
 
         return html`<div style=${{ maxWidth: 600, margin: "0 auto", padding: "20px 16px 60px" }}>
           <div style=${{ textAlign: "center", marginBottom: 4 }}>
@@ -2001,7 +2053,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
 
             ${!entitled && html`<${PremiumCTA} onActive=${setEnt} />`}
             ${view === "today" && html`<div>
-              ${data.un && html`<${TodayHero} key=${`${birth.date}|${birth.time}|${birth.place}|${sampleMode ? "s" : ""}`} un=${data.un} visit=${visit} celebrate=${celebrate} name=${sampleMode ? "" : birth.name} apiKey=${sampleMode ? "" : apiKey} context=${buildOracleContext(data, birth)} birth=${birth} dailyOracle=${settings.dailyOracle} />`}
+              ${data.un && html`<${TodayHero} key=${`${todayKey}|${birth.date}|${birth.time}|${birth.place}|${sampleMode ? "s" : ""}`} un=${data.un} visit=${visit} celebrate=${celebrate} name=${sampleMode ? "" : birth.name} apiKey=${sampleMode ? "" : apiKey} context=${buildOracleContext(data, birth)} birth=${birth} dailyOracle=${settings.dailyOracle} />`}
               ${!birth.timeKnown && html`<div style=${{ fontSize: 13, color: C.accent, background: C.accent + "14", border: `1px solid ${C.accent}55`, borderRadius: 10, padding: "9px 12px", marginBottom: 12, lineHeight: 1.7 }}>
                 出生時刻が未入力のため <b>12:00</b> として計算しています。時刻が分かると、ASC（上昇宮）やハウスがより正確になります。
               </div>`}
