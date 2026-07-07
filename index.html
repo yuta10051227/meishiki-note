@@ -1872,7 +1872,33 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
       // ── あなたの鑑定書（プロの鑑定文風・読み物）──
       // 携帯公式占い等で定番の「章立て・二人称・です/ます長文」様式を、端末内の計算結果から生成。
       // 文章はすべて本アプリのオリジナル。断定的な的中表現は使わない（景表法配慮）。
-      function Kanteisho({ detail, ten, dai, birth }) {
+      // 鑑定書の語り口（言語化・伝え方の方向性）。open/close を差し替え、aiTone はAI深掘りの指示に使う。
+      const KANTEI_VOICES = [
+        { key: "gentle", label: "🕊 やさしく", aiTone: "やさしく寄り添う語り口",
+          open: (h) => `${h}。ようこそ、あなたの鑑定書へ。今日もそっと、あなたの星に耳を澄ませてみましょう。`,
+          close: (h) => `星の示す質は、良し悪しではなく“持ち味”です。${h}が${h}のままでいるとき、流れはいちばん優しく巡ります。今日という一日を、どうかあなたらしく。` },
+        { key: "honest", label: "🔥 本音で", aiTone: "率直で歯に衣着せない本音の語り口（ただし攻撃的にはならない）",
+          open: (h) => `${h}、率直にいきましょう。飾らず、あなたの星が示す“素”を、そのまま言葉にします。`,
+          close: (h) => `結局、${h}の強みは${h}にしか使いこなせません。ごまかさず、持ち味で勝負を。今日、一歩でいい。動きましょう。` },
+        { key: "poetic", label: "🌙 詩的に", aiTone: "詩的で文学的な、静かで美しい語り口",
+          open: (h) => `${h}へ。あなたという星座に、そっと灯をともします。生まれた夜の空が、いまも胸の奥で瞬いています。`,
+          close: (h) => `星は未来を縛る鎖ではなく、道を照らす小さな灯。${h}の名の光が、今日もどこかの誰かを、あたためますように。` },
+        { key: "coach", label: "🧭 問いかけ", aiTone: "問いかけを中心にした、内省を促すコーチングの語り口",
+          open: (h) => `${h}。今日は「答え」より「問い」を持ち帰ってほしいのです。あなたの星は、あなた自身への問いかけの束でもあります。`,
+          close: (h) => `さて、${h}。この鑑定書を閉じたあと、最初の小さな一歩は何にしますか。決めるのは、いつでもあなたです。` },
+        { key: "friend", label: "🍵 親友風", aiTone: "親しい友だちに話すような、くだけて温かい語り口",
+          open: (h) => `やあ、${h}。お茶でも飲みながら、あなたの話をしよう。難しいことは抜きにして、ね。`,
+          close: (h) => `そんなわけで、${h}。あなたはあなたのままで大丈夫。また明日も、ここで待ってるよ。` },
+      ];
+      // 日替わりで照らす“一面”の候補（五つの星・三つのエネルギー・日干の質）と、今日の問い。
+      function buildKanteiPool(detail) {
+        const pool = [];
+        (detail.stars || []).forEach((s) => pool.push({ id: "s_" + s.pos, label: `${s.posLabel}に宿る「${s.star}」`, body: s.desc || "", q: `今日、この「${s.star}」の力を、どんな場面で活かせそうですか？` }));
+        (detail.energies || []).forEach((e) => pool.push({ id: "e_" + e.phase, label: `${e.phase}期の「${e.name}」`, body: (e.meaning && (e.meaning.desc || e.meaning)) || "", q: `${e.phase}期のあなたに、今できる小さな準備をひとつ挙げるなら？` }));
+        if (detail.dayType) pool.push({ id: "dt", label: `${detail.dayType.label}という質`, body: detail.dayType.desc || "", q: `${detail.dayType.label}らしさを、今日ひとつ大切にするなら、何を選びますか？` });
+        return pool;
+      }
+      function Kanteisho({ detail, ten, dai, birth, apiKey, context }) {
         if (!detail || !detail.dayType) return null;
         const honor = birth.name ? `${birth.name}さん` : "あなた";
         const dt = detail.dayType;
@@ -1881,7 +1907,8 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         const en = detail.energies || [];
         const d = new Date(birth.date + "T00:00:00");
         const dLabel = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
-        const serif = { fontFamily: '"Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif', lineHeight: 2.05, fontSize: 14.5, color: C.text };
+        const seed = `${birth.date}|${birth.time}|${birth.place}`;
+        const serif = { fontFamily: MINCHO, lineHeight: 2.05, fontSize: 14.5, color: C.text };
         const chap = (n, t) => html`<div style=${{ margin: "26px 0 12px", textAlign: "center" }}>
           <div style=${{ fontSize: 11, color: C.accent, letterSpacing: 4 }}>第${n}章</div>
           <div style=${{ ...serif, fontSize: 16.5, fontWeight: 700 }}>${t}</div>
@@ -1890,13 +1917,54 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         const p = (t) => html`<p style=${{ ...serif, margin: "0 0 13px" }}>${t}</p>`;
         const cur = dai && dai.current;
         const next = dai && dai.roadmap && dai.roadmap[(dai.roadmap.findIndex((x) => x.current) + 1) || -1];
+
+        // 語り口（伝え方の方向性）
+        const VSTORE = "meishiki-note:kantei-voice";
+        const [voice, setVoice] = useState(() => { try { return localStorage.getItem(VSTORE) || "gentle"; } catch { return "gentle"; } });
+        const V = KANTEI_VOICES.find((x) => x.key === voice) || KANTEI_VOICES[0];
+        const pickV = (k) => { haptic(); setVoice(k); try { localStorage.setItem(VSTORE, k); } catch {} };
+
+        // 今日の一節（日替わりで命式の一面を照らす）
+        const now = new Date();
+        const doy = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
+        const todayISO = ymd(now);
+        const pool = buildKanteiPool(detail);
+        const facet = pool.length ? pool[(doy + strHash(seed)) % pool.length] : null;
+
+        // AIでさらに深く（設定時のみ・1日1回キャッシュ）
+        const deepKey = `meishiki-note:kdeep:${seed}|${todayISO}|${facet ? facet.id : ""}|${voice}`;
+        const [deep, setDeep] = useState("");
+        const [deepBusy, setDeepBusy] = useState(false);
+        useEffect(() => { try { setDeep(localStorage.getItem(deepKey) || ""); } catch { setDeep(""); } }, [deepKey]);
+        const genDeep = async () => {
+          if (!aiReady(apiKey) || deepBusy || !facet) return;
+          setDeepBusy(true);
+          try {
+            const sys = `あなたは相談者の専属占術師です。下の命式を踏まえ、今日この人へ「${facet.label}」という一面を、${V.aiTone}で200〜300字の鑑定文に。占い用語は噛み砕き、断定しすぎず、最後は今日の小さな一歩か問いで結ぶ。前置きは短く。\n# 命式\n${context || ""}`;
+            const t = await callAI(sys, [{ role: "user", content: `今日は${todayISO}。「${facet.label}」について${honor}に深く語ってください。参考メモ：${facet.body}` }], apiKey);
+            if (t) { setDeep(t); try { localStorage.setItem(deepKey, t); } catch {} }
+          } catch (e) { /* 失敗時は決定論の一節のまま */ } finally { setDeepBusy(false); }
+        };
+
         return html`<div style=${{ background: C.panel, border: `1px solid ${C.accent}66`, borderRadius: 16, padding: "24px 20px", marginBottom: 16, boxShadow: `inset 0 0 0 4px ${C.bg}, inset 0 0 0 5px ${C.accent}44` }}>
-          <div style=${{ textAlign: "center", marginBottom: 18 }}>
+          <div style=${{ textAlign: "center", marginBottom: 14 }}>
             <div style=${{ fontSize: 11, color: C.accent, letterSpacing: 6 }}>命式鑑定書</div>
             <div style=${{ ...serif, fontSize: 19, fontWeight: 700, marginTop: 4 }}>${honor}の星の設計図</div>
             <div style=${{ fontSize: 11.5, color: C.faint, marginTop: 6 }}>${dLabel} 生まれ ／ 命式：${detail.pillars.year}年 ${detail.pillars.month}月 ${detail.pillars.day}日</div>
           </div>
-          ${p(`${honor}。ようこそ、あなたの鑑定書へ。ここに記すのは、${dLabel}にこの世に生を受けた、あなたという人の“設計図”です。星は未来を縛るものではありません。自分の質を知り、流れに沿って生きるための、静かな道しるべです。どうぞご自身と対話するつもりで、ゆっくり読み進めてください。`)}
+          <div style=${{ fontSize: 11, color: C.faint, textAlign: "center", marginBottom: 6 }}>語り口をえらぶ</div>
+          <div style=${{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginBottom: 14 }}>
+            ${KANTEI_VOICES.map((x) => { const on = x.key === voice; return html`<button key=${x.key} className="tap" onClick=${() => pickV(x.key)} style=${{ border: `1px solid ${on ? C.accent : C.line}`, background: on ? C.accent + "22" : C.panel2, color: on ? C.accent : C.sub, borderRadius: 999, padding: "5px 11px", fontSize: 12.5, fontWeight: on ? 700 : 400, cursor: "pointer" }}>${x.label}</button>`; })}
+          </div>
+          ${facet && html`<div className="tt-in" style=${{ background: C.accent + "12", border: `1px solid ${C.accent}66`, borderRadius: 12, padding: "14px 15px", marginBottom: 6 }}>
+            <div style=${{ fontSize: 11, color: C.accent, letterSpacing: 3, marginBottom: 5 }}>🗓 今日の一節 ・ ${now.getMonth() + 1}/${now.getDate()}</div>
+            <div style=${{ ...serif, fontSize: 15.5, fontWeight: 700, margin: "0 0 6px" }}>${facet.label}</div>
+            <div style=${{ ...serif, fontSize: 14, margin: 0 }}>${facet.body}</div>
+            <div style=${{ ...serif, fontSize: 13.5, color: C.purple, marginTop: 8 }}>🕯 今日の問い：${facet.q}</div>
+            ${deep && html`<div style=${{ ...serif, fontSize: 14, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.accent}44`, whiteSpace: "pre-wrap" }}>${deep}</div>`}
+            ${aiReady(apiKey) && !deep && html`<button className="tap" onClick=${genDeep} disabled=${deepBusy} style=${{ marginTop: 10, background: "none", border: `1px solid ${C.accent}`, color: C.accent, borderRadius: 999, padding: "6px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>${deepBusy ? "読み解いています…" : "🔮 この一節をAIでさらに深く読む"}</button>`}
+          </div>`}
+          ${p(`${V.open(honor)} ここに記すのは、${dLabel}に生を受けた、あなたという人の“設計図”です。星は未来を縛るものではなく、自分の質を知り流れに沿って生きるための、静かな道しるべです。`)}
           ${chap("一", "あなたという人——生まれ持った質")}
           ${p(`あなたの日干（生まれた日の天干）は「${dt.stem}」。陰陽五行でいえば${dt.yinYang}の${dt.element}、${dt.label}にたとえられる質です。${dt.desc}`)}
           ${p(`そして、あなたの胸の中心には「${center.star}」が据えられています。${center.desc}この星と${dt.label}の質が重なり合うところに、${honor}の生き方の芯——迷ったとき立ち返る場所があります。`)}
@@ -1913,7 +1981,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
           ${cur && cur.preStart && chap("五", "これから始まる十年")}
           ${cur && cur.preStart && p(`あなたの大運（十年ごとの大きな流れ）は${cur.startAge}歳から始まります。いまは、その最初の季節に向けて土を耕している時期。焦らず、好奇心のままに種を集めてください。`)}
           ${chap("結", "むすびに")}
-          ${p(`ここまで読んでくださって、ありがとうございます。星の示す質は、良し悪しではなく「持ち味」です。${honor}が${honor}のままで進むとき、流れはいちばん滑らかになります。この鑑定書は、いつでも開ける“自分の取扱説明書”として、お手元に。今日という一日を、あなたらしく。`)}
+          ${p(V.close(honor))}
           <div style=${{ textAlign: "right", marginTop: 14, fontSize: 11.5, color: C.faint }}>鑑定日 ${ymd(new Date()).replace(/-/g, "/")} ・ 命式ノート</div>
         </div>`;
       }
@@ -2179,8 +2247,8 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               ${data.chart && html`<${Signature} chart=${data.chart} />`}
               ${data.chart && html`<${Insight} chart=${data.chart} />`}
               ${data.chart && html`<${SoulNode} chart=${data.chart} />`}
-              ${data.detail && gateP(html`<${Section} title="📜 あなたの鑑定書（読み物）" color=${C.accent} sub="章立ての鑑定文で、あなたの質・五つの星・人生の季節・天中殺・いまの十年をひとつづきに読み解きます。" collapsible=${true} defaultOpen=${false}>
-                <${Kanteisho} detail=${data.detail} ten=${data.ten} dai=${data.dai} birth=${birth} />
+              ${data.detail && gateP(html`<${Section} title="📜 あなたの鑑定書（毎日ひらく）" color=${C.accent} sub="語り口を選べて、毎日ちがう“今日の一節”と問いが届く鑑定書。あなたの質・五つの星・人生の季節・天中殺・いまの十年まで一続きで読み解きます。" collapsible=${true} defaultOpen=${false}>
+                <${Kanteisho} detail=${data.detail} ten=${data.ten} dai=${data.dai} birth=${birth} apiKey=${apiKey} context=${buildOracleContext(data, birth)} />
               <//>`, "あなたの鑑定書（読み物）")}
               ${sec.natal !== false && data.chart && gateP(html`<${Section} title="ネイタルチャート（出生図）" color=${C.purple} sub="生まれた瞬間の星空。天体をタップすると、あなたの性格や才能が分かります。" collapsible=${true}>
                 <${Horoscope} chart=${data.chart} />
