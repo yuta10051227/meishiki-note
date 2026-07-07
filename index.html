@@ -1340,6 +1340,7 @@
         </div>`;
       }
 
+      const MINCHO = '"Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif'; // 鑑定書用の明朝体
       const CONSULT_CATS = [["💼 仕事・キャリア", 10], ["💞 恋愛・結婚", 7], ["💰 お金・投資", 2], ["🏠 引っ越し・環境", 4], ["🤝 人間関係", 11], ["📚 学び・挑戦", 9], ["🌱 その他・自分のこと", 1]];
       // みんなが特に気になる“定番の質問”。ワンタップで質問文＆分野が入る。[質問文, 分野index]
       const POPULAR_Q = [
@@ -1359,6 +1360,7 @@
         const [ans, setAns] = useState("");
         const [busy, setBusy] = useState(false);
         const [err, setErr] = useState("");
+        const honor = birth && birth.name ? `${birth.name}さん` : "あなた";
         const sIdx = (l) => Math.floor((((l % 360) + 360) % 360) / 30);
         const ascSign = chart && chart.ascDeg != null ? sIdx(chart.ascDeg) : 0;
         const f = useMemo(() => {
@@ -1390,7 +1392,7 @@
           if (f.tone2 === "now") return "結論：今月がチャンス。1か月以内に最初の一歩を起こすと流れに乗れる。";
           return `結論：外の波は穏やか＝“仕込み”の好機。大勝負は${nj}に取っておき、今は土台づくり・情報集め・小さな試運転を。`;
         };
-        const detFallback = () => `${stanceLine()}\n\nあなたは太陽${SIGN_INFO[f.sun2][0]}座（${SIGN_INFO[f.sun2][3]}）×水星${SIGN_INFO[f.merc][0]}座（${SIGN_INFO[f.merc][3]}）で判断するタイプ。この分野では「${SIGN_MOVE[f.si][0]}」が活きる一方、「${SIGN_MOVE[f.si][1]}」に注意。\n\n動くなら：${goodTxt()}\n\n最終的に決めるのは、あなた自身です。`;
+        const detFallback = () => `${honor}、ご相談を確かに受け取りました。星の巡りと、あなたの生まれ持った質から読み解きます。\n\n${stanceLine()}\n\nあなたは太陽${SIGN_INFO[f.sun2][0]}座（${SIGN_INFO[f.sun2][3]}）×水星${SIGN_INFO[f.merc][0]}座（${SIGN_INFO[f.merc][3]}）で物事を決めていく方。この件では「${SIGN_MOVE[f.si][0]}」があなたの追い風となり、一方で「${SIGN_MOVE[f.si][1]}」に少し心を配ると、流れがいっそう整うでしょう。\n\n動くなら、${goodTxt()}\n\n最終的に決めるのは、あなた自身です。星はただ、そっと背中を押すだけ。`;
 
         const factsText = () => {
           const nj = f.nextJup ? `${f.nextJup.ym}ごろ` : "不明";
@@ -1401,12 +1403,16 @@
           if (!aiReady(apiKey)) { setAns(detFallback()); return; }
           setBusy(true); setAns("");
           try {
-            const sys = `あなたは相談者の専属占術師兼コーチです。下の「占いの根拠(facts)」と「命式」だけに基づき、相談者の悩みに対して【立場を取った具体的な助言】を返してください。曖昧に逃げず、しかし断定しすぎないこと。占い用語は噛み砕く。
-# 構成（この順で、見出しなしの短い段落で）
-1) 結論：今は「動く/待つ/準備する」のどれが得策かを一言で言い切る
-2) 理由：今の時期(facts)と本人の決断スタイル・傾向から3〜4文で
-3) 動くなら：いつ・最初の一歩を具体的に
-最後に「最終的に決めるのはあなた」と一言。深刻な不調や危機を感じる内容なら、専門の相談窓口の利用も勧める。日本語で250〜400字。${tone ? TONE_PROMPTS[tone] || "" : ""}
+            const sys = `あなたは相談者の専属占術師です。下の「占いの根拠(facts)」と「命式」に基づき、相談者の悩みへの鑑定を、格調ある“鑑定書”の文体で綴ってください。曖昧に逃げず、しかし断定しすぎないこと。占い用語は噛み砕く。
+# 文体（鑑定書スタイル）
+- 相談者に「${honor}」と語りかける二人称、です・ます調。丁寧でやわらかく、しかし芯のある助言。
+- 冒頭は相談を受けとめる一文から始める（例：「${honor}、ご相談を確かに受け取りました。」）。
+- 見出しは付けず、自然な段落でひとつづきの鑑定文にする。
+# 内容（この流れで）
+1) いまのあなたを包む運気（時期）の見立て
+2) 生まれ持った質・決断のクセから見た、この件との向き合い方
+3) 動くならいつ・最初の一歩を具体的に
+最後は「最終的に決めるのは、あなた自身です。」と結ぶ。深刻な不調や危機を感じる内容なら、専門の相談窓口の利用もそっと勧める。日本語で300〜450字。${tone ? TONE_PROMPTS[tone] || "" : ""}
 # 占いの根拠(facts)
 ${factsText()}
 # 相談者の命式
@@ -1429,7 +1435,15 @@ ${context || ""}`;
           <textarea value=${q} onInput=${(e) => setQ(e.target.value)} placeholder="例：今の会社を辞めてフリーになるか迷っています" rows=${2} style=${{ ...inp, resize: "vertical", lineHeight: 1.5 }}></textarea>
           <button onClick=${run} disabled=${busy} style=${{ ...inp, marginBottom: 12, background: busy ? C.line : C.purple, color: C.onAccent, fontWeight: 700, border: "none", cursor: busy ? "default" : "pointer" }}>${busy ? "占っています…" : aiReady(apiKey) ? "🔮 相談する" : "🔮 相談する（簡易版・AI設定で本格鑑定）"}</button>
           ${err && html`<div style=${{ fontSize: 13, color: C.red, marginBottom: 8 }}>エラー：${err}（簡易結果を表示）</div>`}
-          ${ans && html`<div style=${{ background: `linear-gradient(135deg, ${f.col}1F, ${C.panel})`, border: `1px solid ${f.col}`, borderRadius: 14, padding: 15, marginBottom: 12, whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.9, color: C.text }}>${ans}</div>`}
+          ${ans && html`<div className="tt-in" style=${{ background: C.panel, border: `1px solid ${f.col}88`, borderRadius: 14, padding: "20px 18px", marginBottom: 12, boxShadow: `inset 0 0 0 4px ${C.bg}, inset 0 0 0 5px ${f.col}44` }}>
+            <div style=${{ textAlign: "center", marginBottom: 12 }}>
+              <div style=${{ fontSize: 10.5, color: f.col, letterSpacing: 5 }}>鑑定書</div>
+              <div style=${{ fontFamily: MINCHO, fontSize: 15.5, fontWeight: 700, color: C.text, marginTop: 3 }}>${honor}への鑑定</div>
+              <div style=${{ width: 40, height: 1, background: f.col, margin: "8px auto 0", opacity: 0.7 }}></div>
+            </div>
+            <div style=${{ fontFamily: MINCHO, whiteSpace: "pre-wrap", fontSize: 14.5, lineHeight: 2.0, color: C.text }}>${ans}</div>
+            <div style=${{ textAlign: "right", marginTop: 12, fontFamily: MINCHO, fontSize: 11.5, color: C.faint }}>鑑定日 ${ymd(new Date()).replace(/-/g, "/")} ・ 命式ノート</div>
+          </div>`}
           <div style=${{ background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 12, padding: 13, fontSize: 12.5, lineHeight: 1.8, color: C.sub }}>
             <div style=${{ fontSize: 12, fontWeight: 700, color: C.faint, marginBottom: 4 }}>📊 占いの根拠（自動計算）</div>
             <div>🕒 今の時期：<b style=${{ color: f.col }}>${f.label}</b></div>
