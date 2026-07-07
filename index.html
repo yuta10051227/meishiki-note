@@ -1341,6 +1341,18 @@
       }
 
       const CONSULT_CATS = [["💼 仕事・キャリア", 10], ["💞 恋愛・結婚", 7], ["💰 お金・投資", 2], ["🏠 引っ越し・環境", 4], ["🤝 人間関係", 11], ["📚 学び・挑戦", 9], ["🌱 その他・自分のこと", 1]];
+      // みんなが特に気になる“定番の質問”。ワンタップで質問文＆分野が入る。[質問文, 分野index]
+      const POPULAR_Q = [
+        ["運命の人とはいつ、どこで出会える？", 1],
+        ["今の恋は結婚まで進む？", 1],
+        ["あの人は私のことをどう思ってる？", 1],
+        ["転職・独立するべき？そのタイミングは？", 0],
+        ["私に向いている仕事・天職は？", 0],
+        ["金運が上がるのはいつ？お金の不安は消える？", 2],
+        ["今年、人生の転機はいつ来る？", 6],
+        ["この人間関係、続ける？距離を置く？", 4],
+        ["私の本当の性格・強みは？", 6],
+      ];
       function Consult({ birth, chart, transit, exits, apiKey, context, tone }) {
         const [cat, setCat] = useState(0);
         const [q, setQ] = useState("");
@@ -1408,7 +1420,11 @@ ${context || ""}`;
         return html`<div>
           <div style=${{ fontSize: 13, color: C.sub, lineHeight: 1.7, marginBottom: 10 }}>いま迷っていることを書いて、分野を選んでください。<b style=${{ color: C.text }}>あなたの星 × 今の時期</b>から、動くべきか・いつかを一緒に考えます。</div>
           <div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-            ${CONSULT_CATS.map((x, i) => { const on = i === cat; return html`<button key=${i} onClick=${() => { setCat(i); setAns(""); }} style=${{ border: `1px solid ${on ? C.purple : C.line}`, background: on ? C.purple + "22" : C.panel2, color: C.text, borderRadius: 999, padding: "6px 11px", fontSize: 13, cursor: "pointer", fontWeight: on ? 700 : 400 }}>${x[0]}</button>`; })}
+            ${CONSULT_CATS.map((x, i) => { const on = i === cat; return html`<button key=${i} className="tap" onClick=${() => { setCat(i); setAns(""); }} style=${{ border: `1px solid ${on ? C.purple : C.line}`, background: on ? C.purple + "22" : C.panel2, color: C.text, borderRadius: 999, padding: "6px 11px", fontSize: 13, cursor: "pointer", fontWeight: on ? 700 : 400 }}>${x[0]}</button>`; })}
+          </div>
+          <div style=${{ fontSize: 12, color: C.faint, marginBottom: 6 }}>💬 みんながよく聞く質問（タップで入力）</div>
+          <div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+            ${POPULAR_Q.map(([text, ci], i) => html`<button key=${i} className="tap" onClick=${() => { haptic(); setQ(text); setCat(ci); setAns(""); }} style=${{ border: `1px solid ${q === text ? C.accent : C.line}`, background: q === text ? C.accent + "22" : C.panel2, color: q === text ? C.accent : C.sub, borderRadius: 999, padding: "6px 11px", fontSize: 12.5, cursor: "pointer", fontWeight: q === text ? 700 : 400 }}>${text}</button>`)}
           </div>
           <textarea value=${q} onInput=${(e) => setQ(e.target.value)} placeholder="例：今の会社を辞めてフリーになるか迷っています" rows=${2} style=${{ ...inp, resize: "vertical", lineHeight: 1.5 }}></textarea>
           <button onClick=${run} disabled=${busy} style=${{ ...inp, marginBottom: 12, background: busy ? C.line : C.purple, color: C.onAccent, fontWeight: 700, border: "none", cursor: busy ? "default" : "pointer" }}>${busy ? "占っています…" : aiReady(apiKey) ? "🔮 相談する" : "🔮 相談する（簡易版・AI設定で本格鑑定）"}</button>
