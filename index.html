@@ -1839,6 +1839,55 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
       // サンプル体験用のプロフィール（保存はしない）
       const SAMPLE_FORM = { name: "サンプル", date: "1990-05-15", time: "12:00", gender: "male", place: "東京", memo: "" };
 
+      // ── あなたの鑑定書（プロの鑑定文風・読み物）──
+      // 携帯公式占い等で定番の「章立て・二人称・です/ます長文」様式を、端末内の計算結果から生成。
+      // 文章はすべて本アプリのオリジナル。断定的な的中表現は使わない（景表法配慮）。
+      function Kanteisho({ detail, ten, dai, birth }) {
+        if (!detail || !detail.dayType) return null;
+        const honor = birth.name ? `${birth.name}さん` : "あなた";
+        const dt = detail.dayType;
+        const center = detail.stars.find((s) => s.pos === "center") || detail.stars[0];
+        const others = detail.stars.filter((s) => s !== center);
+        const en = detail.energies || [];
+        const d = new Date(birth.date + "T00:00:00");
+        const dLabel = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+        const serif = { fontFamily: '"Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif', lineHeight: 2.05, fontSize: 14.5, color: C.text };
+        const chap = (n, t) => html`<div style=${{ margin: "26px 0 12px", textAlign: "center" }}>
+          <div style=${{ fontSize: 11, color: C.accent, letterSpacing: 4 }}>第${n}章</div>
+          <div style=${{ ...serif, fontSize: 16.5, fontWeight: 700 }}>${t}</div>
+          <div style=${{ width: 44, height: 1, background: C.accent, margin: "9px auto 0", opacity: 0.7 }}></div>
+        </div>`;
+        const p = (t) => html`<p style=${{ ...serif, margin: "0 0 13px" }}>${t}</p>`;
+        const cur = dai && dai.current;
+        const next = dai && dai.roadmap && dai.roadmap[(dai.roadmap.findIndex((x) => x.current) + 1) || -1];
+        return html`<div style=${{ background: C.panel, border: `1px solid ${C.accent}66`, borderRadius: 16, padding: "24px 20px", marginBottom: 16, boxShadow: `inset 0 0 0 4px ${C.bg}, inset 0 0 0 5px ${C.accent}44` }}>
+          <div style=${{ textAlign: "center", marginBottom: 18 }}>
+            <div style=${{ fontSize: 11, color: C.accent, letterSpacing: 6 }}>命式鑑定書</div>
+            <div style=${{ ...serif, fontSize: 19, fontWeight: 700, marginTop: 4 }}>${honor}の星の設計図</div>
+            <div style=${{ fontSize: 11.5, color: C.faint, marginTop: 6 }}>${dLabel} 生まれ ／ 命式：${detail.pillars.year}年 ${detail.pillars.month}月 ${detail.pillars.day}日</div>
+          </div>
+          ${p(`${honor}。ようこそ、あなたの鑑定書へ。ここに記すのは、${dLabel}にこの世に生を受けた、あなたという人の“設計図”です。星は未来を縛るものではありません。自分の質を知り、流れに沿って生きるための、静かな道しるべです。どうぞご自身と対話するつもりで、ゆっくり読み進めてください。`)}
+          ${chap("一", "あなたという人——生まれ持った質")}
+          ${p(`あなたの日干（生まれた日の天干）は「${dt.stem}」。陰陽五行でいえば${dt.yinYang}の${dt.element}、${dt.label}にたとえられる質です。${dt.desc}`)}
+          ${p(`そして、あなたの胸の中心には「${center.star}」が据えられています。${center.desc}この星と${dt.label}の質が重なり合うところに、${honor}の生き方の芯——迷ったとき立ち返る場所があります。`)}
+          ${chap("二", "五つの星が語るあなた")}
+          ${p(`算命学では、人の性を五つの方位に宿る星で読み解きます。${honor}の星々は、次のように並んでいます。`)}
+          ${others.map((s, i) => p(html`<b style=${{ color: C.purple }}>${s.emoji} ${s.posLabel}に「${s.star}」</b>——${s.posMeaning}。${s.desc}`))}
+          ${chap("三", "人生という三つの季節")}
+          ${p("人生を、初年・中年・晩年という三つの季節にたとえるなら——")}
+          ${en.map((e) => p(html`<b style=${{ color: C.blue }}>${e.phase}期は「${e.name}」</b>（気の強さ ${e.energy}）。${(e.meaning && (e.meaning.desc || e.meaning)) || ""}`))}
+          ${ten && chap("四", "運気の休息期——天中殺")}
+          ${ten && p(`あなたの天中殺は「${ten.group}」。${ten.desc}直近では${(ten.years || []).map((y) => `${y}年`).join("と")}がその時期にあたります。この二年間は、無理に新しい扉を開くより、積み上げてきたものを整え、学びを深めることが、次の飛躍のいちばんの土台になります。`)}
+          ${cur && !cur.preStart && chap("五", "いま歩いている十年")}
+          ${cur && !cur.preStart && p(`大運で見ると、いまのあなたは「${cur.star}」の十年（${cur.ageFrom}歳〜${cur.ageTo}歳）を歩いています。この期のテーマは「${cur.theme || ""}」。${next ? `続く${next.ageFrom}歳からは「${next.star}」の十年へと移ろい、テーマは「${next.theme}」に変わります。いまの季節を味わい尽くすことが、次の季節への何よりの準備です。` : ""}`)}
+          ${cur && cur.preStart && chap("五", "これから始まる十年")}
+          ${cur && cur.preStart && p(`あなたの大運（十年ごとの大きな流れ）は${cur.startAge}歳から始まります。いまは、その最初の季節に向けて土を耕している時期。焦らず、好奇心のままに種を集めてください。`)}
+          ${chap("結", "むすびに")}
+          ${p(`ここまで読んでくださって、ありがとうございます。星の示す質は、良し悪しではなく「持ち味」です。${honor}が${honor}のままで進むとき、流れはいちばん滑らかになります。この鑑定書は、いつでも開ける“自分の取扱説明書”として、お手元に。今日という一日を、あなたらしく。`)}
+          <div style=${{ textAlign: "right", marginTop: 14, fontSize: 11.5, color: C.faint }}>鑑定日 ${ymd(new Date()).replace(/-/g, "/")} ・ 命式ノート</div>
+        </div>`;
+      }
+
       // ── 課金UI（BILLING未設定なら何も出ない＝現状維持）──
       const subLabel = () => BILLING.ctaLabel || (BILLING.trialDays > 0 ? `✨ ${BILLING.trialDays}日間 無料ではじめる` : (BILLING.mode === "mosh" ? "✨ MOSHで購読する" : "✨ 購読する"));
       function SubscribeButton({ small }) {
@@ -2068,6 +2117,9 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               ${data.chart && html`<${Signature} chart=${data.chart} />`}
               ${data.chart && html`<${Insight} chart=${data.chart} />`}
               ${data.chart && html`<${SoulNode} chart=${data.chart} />`}
+              ${data.detail && gateP(html`<${Section} title="📜 あなたの鑑定書（読み物）" color=${C.accent} sub="章立ての鑑定文で、あなたの質・五つの星・人生の季節・天中殺・いまの十年をひとつづきに読み解きます。" collapsible=${true} defaultOpen=${false}>
+                <${Kanteisho} detail=${data.detail} ten=${data.ten} dai=${data.dai} birth=${birth} />
+              <//>`, "あなたの鑑定書（読み物）")}
               ${sec.natal !== false && data.chart && gateP(html`<${Section} title="ネイタルチャート（出生図）" color=${C.purple} sub="生まれた瞬間の星空。天体をタップすると、あなたの性格や才能が分かります。" collapsible=${true}>
                 <${Horoscope} chart=${data.chart} />
               <//>`, "ネイタルチャート（出生図）")}
