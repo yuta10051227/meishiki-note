@@ -1994,6 +1994,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         const entitled = !BILLING.api || !!(ent && ent.active); // BILLING未設定なら全機能開放（現状維持）
         const gateP = (node, label) => (entitled ? node : html`<${Locked} label=${label} />`); // 有料機能のゲート
 
+        const [editList, setEditList] = useState(false); // プロフィールリストの編集モード
         const persist = (next) => { setStore(next); saveStore(next); };
         const onSaveKey = (k) => { saveKey(k); setApiKey(k); };
         const onClearKey = () => { clearKey(); setApiKey(""); };
@@ -2005,7 +2006,8 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
           setErr("");
           if (!form.date) { setErr("生年月日を入れてください"); return; }
           const id = editingId || newId();
-          const entry = { id, name: form.name || "", date: form.date, time: form.time || "", gender: form.gender || "", place: form.place || DEFAULT_FORM.place, memo: form.memo || "" };
+          const prev = store.profiles.find((p) => p.id === id);
+          const entry = { id, name: form.name || "", date: form.date, time: form.time || "", gender: form.gender || "", place: form.place || DEFAULT_FORM.place, memo: form.memo || "", hidden: !!(prev && prev.hidden) };
           const exists = store.profiles.some((p) => p.id === id);
           const profiles = exists ? store.profiles.map((p) => (p.id === id ? entry : p)) : [...store.profiles, entry];
           persist({ profiles, currentId: id });
@@ -2033,6 +2035,19 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
           const profiles = store.profiles.filter((p) => p.id !== id);
           persist({ profiles, currentId: store.currentId === id ? null : store.currentId });
           if (editingId === id) { setEditingId(null); setForm({ ...DEFAULT_FORM }); setBirth(null); setCollapsed(false); }
+        };
+        // リストの並べ替え（上/下）と 表示/非表示（隠す）
+        const moveProfile = (id, dir) => {
+          haptic();
+          const arr = [...store.profiles];
+          const i = arr.findIndex((p) => p.id === id); const j = i + dir;
+          if (i < 0 || j < 0 || j >= arr.length) return;
+          const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+          persist({ ...store, profiles: arr });
+        };
+        const toggleHide = (id) => {
+          haptic();
+          persist({ ...store, profiles: store.profiles.map((p) => (p.id === id ? { ...p, hidden: !p.hidden } : p)) });
         };
         const data = useMemo(() => {
           if (!birth) return null;
@@ -2078,15 +2093,32 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               <span style=${{ fontSize: 12, color: C.sub }}>${collapsed ? "開く ▼" : "折りたたむ ▲"}</span>
             </div>
             ${!collapsed && html`<div>
-            ${store.profiles.length > 0 && html`<div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-              ${store.profiles.map((p) => {
+            ${store.profiles.length > 0 && !editList && html`<div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12, alignItems: "center" }}>
+              ${store.profiles.filter((p) => !p.hidden).map((p) => {
                 const on = p.id === editingId;
-                return html`<span key=${p.id} style=${{ display: "inline-flex", alignItems: "center", background: on ? C.purple + "22" : C.panel2, border: `1px solid ${on ? C.purple : C.line}`, borderRadius: 999, padding: "3px 4px 3px 11px" }}>
-                  <button onClick=${() => selectProfile(p.id)} style=${{ background: "none", border: "none", color: on ? C.purple : C.text, cursor: "pointer", fontSize: 13, padding: 0, fontWeight: on ? 700 : 400 }}>${labelOf(p)}</button>
-                  <button onClick=${() => deleteProfile(p.id)} title="削除" style=${{ background: "none", border: "none", color: C.faint, cursor: "pointer", fontSize: 15, lineHeight: 1, padding: "0 4px" }}>×</button>
-                </span>`;
+                return html`<button key=${p.id} className="tap" onClick=${() => selectProfile(p.id)} style=${{ background: on ? C.purple + "22" : C.panel2, border: `1px solid ${on ? C.purple : C.line}`, borderRadius: 999, padding: "5px 13px", color: on ? C.purple : C.text, cursor: "pointer", fontSize: 13, fontWeight: on ? 700 : 400 }}>${labelOf(p)}</button>`;
               })}
-              <button onClick=${startNew} style=${{ background: "none", border: `1px dashed ${C.line}`, color: C.sub, borderRadius: 999, padding: "4px 12px", fontSize: 13, cursor: "pointer" }}>＋ 新規</button>
+              <button className="tap" onClick=${startNew} style=${{ background: "none", border: `1px dashed ${C.line}`, color: C.sub, borderRadius: 999, padding: "5px 12px", fontSize: 13, cursor: "pointer" }}>＋ 新規</button>
+              <button className="tap" onClick=${() => setEditList(true)} style=${{ background: "none", border: `1px solid ${C.line}`, color: C.sub, borderRadius: 999, padding: "5px 12px", fontSize: 13, cursor: "pointer" }}>✏️ 並べ替え・編集</button>
+            </div>`}
+            ${store.profiles.length > 0 && editList && html`<div style=${{ marginBottom: 12, border: `1px solid ${C.line}`, borderRadius: 12, padding: 10 }}>
+              <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style=${{ fontSize: 12.5, fontWeight: 700, color: C.sub }}>並べ替え／表示・非表示／削除</span>
+                <button className="tap" onClick=${() => setEditList(false)} style=${{ background: C.purple, color: C.onAccent, border: "none", borderRadius: 999, padding: "5px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>完了</button>
+              </div>
+              <div style=${{ display: "flex", flexDirection: "column", gap: 6 }}>
+                ${store.profiles.map((p, idx) => {
+                  const on = p.id === editingId; const hid = !!p.hidden;
+                  return html`<div key=${p.id} style=${{ display: "flex", alignItems: "center", gap: 2, background: C.panel2, border: `1px solid ${on ? C.purple : C.line}`, borderRadius: 10, padding: "5px 4px 5px 11px", opacity: hid ? 0.5 : 1 }}>
+                    <span style=${{ flex: 1, minWidth: 0, fontSize: 13, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>${labelOf(p)}${hid ? html`<span style=${{ fontSize: 11, color: C.faint }}> （非表示）</span>` : ""}</span>
+                    <button className="tap" onClick=${() => moveProfile(p.id, -1)} disabled=${idx === 0} title="上へ" style=${{ background: "none", border: "none", color: idx === 0 ? C.line : C.sub, cursor: idx === 0 ? "default" : "pointer", fontSize: 15, padding: "3px 6px" }}>▲</button>
+                    <button className="tap" onClick=${() => moveProfile(p.id, 1)} disabled=${idx === store.profiles.length - 1} title="下へ" style=${{ background: "none", border: "none", color: idx === store.profiles.length - 1 ? C.line : C.sub, cursor: idx === store.profiles.length - 1 ? "default" : "pointer", fontSize: 15, padding: "3px 6px" }}>▼</button>
+                    <button className="tap" onClick=${() => toggleHide(p.id)} title=${hid ? "表示する" : "隠す"} style=${{ background: "none", border: "none", color: C.sub, cursor: "pointer", fontSize: 15, padding: "3px 6px" }}>${hid ? "🙈" : "👁"}</button>
+                    <button className="tap" onClick=${() => { if (confirm(`「${labelOf(p)}」を削除しますか？`)) deleteProfile(p.id); }} title="削除" style=${{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 16, padding: "3px 7px" }}>×</button>
+                  </div>`;
+                })}
+              </div>
+              <button className="tap" onClick=${() => { setEditList(false); startNew(); }} style=${{ background: "none", border: `1px dashed ${C.line}`, color: C.sub, borderRadius: 999, padding: "5px 14px", fontSize: 13, cursor: "pointer", marginTop: 8 }}>＋ 新規で追加</button>
             </div>`}
             <input placeholder="名前（任意）" value=${form.name} onInput=${(e) => setForm({ ...form, name: e.target.value })} style=${inp} />
             <label style=${{ fontSize: 12, color: C.sub, display: "block", marginBottom: 2 }}>生年月日</label>
