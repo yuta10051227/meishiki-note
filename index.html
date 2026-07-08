@@ -59,28 +59,34 @@
       // 配色テーマ（ダーク/ライト）。onAccent = 色付きボタン上の文字色。
       const THEMES = {
         dark: {
-          bg: "#0F1115", panel: "#171A21", panel2: "#1E222B", line: "#2A2F3A",
+          bg: "#0F1115", bg2: "#1A1E2B", panel: "#171A21", panel2: "#1E222B", line: "#2A2F3A",
           text: "#E8EAED", sub: "#B4BBC6", faint: "#A6ADB8",
           purple: "#9B8CFF", green: "#3FB984", blue: "#5B8DEF", accent: "#C9A227", red: "#E2554B",
           onAccent: "#0B0D11",
+          glass: "rgba(28,32,42,0.62)", glassBorder: "rgba(255,255,255,0.10)", glassHi: "rgba(255,255,255,0.06)",
         },
         light: {
-          bg: "#F4F6F9", panel: "#FFFFFF", panel2: "#EEF1F5", line: "#D7DCE3",
+          bg: "#F4F6F9", bg2: "#E7ECF5", panel: "#FFFFFF", panel2: "#EEF1F5", line: "#D7DCE3",
           text: "#1B1F26", sub: "#414956", faint: "#586071",
           purple: "#6C5CE7", green: "#1E9E6A", blue: "#2F6FE0", accent: "#B8860B", red: "#D23B30",
           onAccent: "#FFFFFF",
+          glass: "rgba(255,255,255,0.60)", glassBorder: "rgba(255,255,255,0.70)", glassHi: "rgba(255,255,255,0.55)",
         },
       };
       const THEME_STORE = "meishiki-note:theme";
       const loadTheme = () => { try { return localStorage.getItem(THEME_STORE) === "light" ? "light" : "dark"; } catch { return "dark"; } };
       // C / inp / card は let（ライブバインディング）。テーマ変更時に作り直して全体に反映。
       let C = THEMES[loadTheme()] || THEMES.dark;
-      let inp, card;
+      let inp, card, glass;
       const rebuildStyles = () => {
-        inp = { width: "100%", padding: "12px 14px", marginBottom: 10, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 11, color: C.text, fontSize: 16 };
-        card = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 16, padding: 18, marginBottom: 16 };
+        inp = { width: "100%", padding: "12px 14px", marginBottom: 10, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 13, color: C.text, fontSize: 16 };
+        card = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 20, padding: 18, marginBottom: 16 };
+        // iOS 26 Liquid Glass 素材：半透明＋背景ぼかし＋ヘアライン境界。対応外ブラウザは単色にフォールバック。
+        glass = { background: C.glass, backdropFilter: "blur(22px) saturate(180%)", WebkitBackdropFilter: "blur(22px) saturate(180%)", border: `1px solid ${C.glassBorder}` };
       };
-      const applyBodyTheme = () => { try { document.body.style.background = C.bg; document.body.style.color = C.text; } catch {} };
+      // 背景に淡いグラデーション（ガラスが“奥行き”を映すための下地）
+      const bgGradient = () => `radial-gradient(120% 90% at 50% -12%, ${C.bg2}, ${C.bg} 62%)`;
+      const applyBodyTheme = () => { try { document.body.style.background = bgGradient(); document.body.style.backgroundAttachment = "fixed"; document.body.style.color = C.text; } catch {} };
       const applyTheme = (mode) => {
         C = THEMES[mode] || THEMES.dark;
         rebuildStyles(); applyBodyTheme();
@@ -2143,7 +2149,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
           } catch (e) { return { error: String(e.message || e) }; }
         }, [birth && birth.date, birth && birth.time, birth && birth.gender, birth && birth.place, todayKey]);
 
-        return html`<div style=${{ maxWidth: 600, margin: "0 auto", padding: "20px 16px 60px" }}>
+        return html`<div style=${{ maxWidth: 600, margin: "0 auto", padding: "20px 16px calc(104px + env(safe-area-inset-bottom))" }}>
           <div style=${{ textAlign: "center", marginBottom: 4 }}>
             <div style=${{ fontSize: 23, fontWeight: 800, letterSpacing: 1 }}>命式ノート</div>
             <div style=${{ fontSize: 12.5, color: C.faint }}>生年月日から、毎日の指針と“自分の取扱説明書”を。</div>
@@ -2226,8 +2232,11 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             ${sampleMode && html`<div style=${{ background: C.purple + "1A", border: `1px solid ${C.purple}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12, fontSize: 13, color: C.text, lineHeight: 1.6 }}>
               👀 これは<b>サンプル表示</b>です。<button onClick=${startNew} style=${{ background: C.purple, color: C.onAccent, border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginLeft: 4 }}>自分の生年月日で見る</button>
             </div>`}
-            <div style=${{ position: "sticky", top: 0, zIndex: 5, background: C.bg, display: "flex", gap: 3, padding: "8px 0 9px", marginBottom: 10, borderBottom: `1px solid ${C.line}`, overflowX: "auto" }}>
-              ${[["today", "🌙 今日"], ["me", "✦ わたし"], ["fortune", "🔮 運勢"], ["love", "💞 恋愛"], ["talk", "🧭 相談"]].map(([k, label]) => { const on = view === k; return html`<button key=${k} className="tap" onClick=${() => { haptic(); setView(k); }} style=${{ flex: "1 0 auto", whiteSpace: "nowrap", border: "none", background: on ? C.purple + "1F" : "none", color: on ? C.purple : C.sub, fontSize: 15, fontWeight: on ? 800 : 600, padding: "10px 13px", borderBottom: `2.5px solid ${on ? C.purple : "transparent"}`, borderRadius: "9px 9px 0 0", cursor: "pointer" }}>${label}</button>`; })}
+            <div style=${{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: "calc(14px + env(safe-area-inset-bottom))", zIndex: 50, width: "min(94vw, 560px)", display: "flex", gap: 3, padding: 6, borderRadius: 28, boxShadow: "0 12px 34px rgba(0,0,0,0.30)", ...glass }}>
+              ${[["today", "🌙", "今日"], ["me", "✦", "わたし"], ["fortune", "🔮", "運勢"], ["love", "💞", "恋愛"], ["talk", "🧭", "相談"]].map(([k, icon, label]) => { const on = view === k; return html`<button key=${k} className="tap" onClick=${() => { haptic(); setView(k); }} style=${{ flex: 1, border: "none", background: on ? C.purple + "2E" : "transparent", color: on ? C.purple : C.sub, borderRadius: 22, padding: "8px 2px 6px", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer" }}>
+                <span style=${{ fontSize: 19, lineHeight: 1 }}>${icon}</span>
+                <span style=${{ fontSize: 10.5, fontWeight: on ? 800 : 600, letterSpacing: 0.2 }}>${label}</span>
+              </button>`; })}
             </div>
 
             ${!entitled && html`<${PremiumCTA} onActive=${setEnt} />`}
