@@ -80,9 +80,10 @@
       let inp, card, glass;
       const rebuildStyles = () => {
         inp = { width: "100%", padding: "12px 14px", marginBottom: 10, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 13, color: C.text, fontSize: 16 };
-        card = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 20, padding: 18, marginBottom: 16 };
         // iOS 26 Liquid Glass 素材：半透明＋背景ぼかし＋ヘアライン境界。対応外ブラウザは単色にフォールバック。
         glass = { background: C.glass, backdropFilter: "blur(22px) saturate(180%)", WebkitBackdropFilter: "blur(22px) saturate(180%)", border: `1px solid ${C.glassBorder}` };
+        // カードも全面ガラス化＋浮遊感の影
+        card = { ...glass, borderRadius: 20, padding: 18, marginBottom: 16, boxShadow: "0 6px 22px rgba(0,0,0,0.14)" };
       };
       // 背景に淡いグラデーション（ガラスが“奥行き”を映すための下地）
       const bgGradient = () => `radial-gradient(120% 90% at 50% -12%, ${C.bg2}, ${C.bg} 62%)`;
@@ -1441,7 +1442,7 @@ ${context || ""}`;
           <textarea value=${q} onInput=${(e) => setQ(e.target.value)} placeholder="例：今の会社を辞めてフリーになるか迷っています" rows=${2} style=${{ ...inp, resize: "vertical", lineHeight: 1.5 }}></textarea>
           <button onClick=${run} disabled=${busy} style=${{ ...inp, marginBottom: 12, background: busy ? C.line : C.purple, color: C.onAccent, fontWeight: 700, border: "none", cursor: busy ? "default" : "pointer" }}>${busy ? "占っています…" : aiReady(apiKey) ? "🔮 相談する" : "🔮 相談する（簡易版・AI設定で本格鑑定）"}</button>
           ${err && html`<div style=${{ fontSize: 13, color: C.red, marginBottom: 8 }}>エラー：${err}（簡易結果を表示）</div>`}
-          ${ans && html`<div className="tt-in" style=${{ background: C.panel, border: `1px solid ${f.col}88`, borderRadius: 14, padding: "20px 18px", marginBottom: 12, boxShadow: `inset 0 0 0 4px ${C.bg}, inset 0 0 0 5px ${f.col}44` }}>
+          ${ans && html`<div className="tt-in" style=${{ background: C.glass, backdropFilter: "blur(22px) saturate(180%)", WebkitBackdropFilter: "blur(22px) saturate(180%)", border: `1px solid ${f.col}88`, borderRadius: 18, padding: "20px 18px", marginBottom: 12, boxShadow: `inset 0 0 0 4px ${C.bg}, inset 0 0 0 5px ${f.col}44` }}>
             <div style=${{ textAlign: "center", marginBottom: 12 }}>
               <div style=${{ fontSize: 10.5, color: f.col, letterSpacing: 5 }}>鑑定書</div>
               <div style=${{ fontFamily: MINCHO, fontSize: 15.5, fontWeight: 700, color: C.text, marginTop: 3 }}>${honor}への鑑定</div>
@@ -1742,7 +1743,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
         const [draft, setDraft] = useState(data.commit || "");
         const persist = (next) => { setData(next); saveCoach(next); };
         const q = COACH_Q[(data.focus + new Date().getDate()) % COACH_Q.length];
-        return html`<div style=${{ background: `linear-gradient(135deg, ${C.accent}22, ${C.panel})`, border: `1px solid ${C.accent}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
+        return html`<div style=${{ background: `linear-gradient(135deg, ${C.accent}26, ${C.glass})`, backdropFilter: "blur(22px) saturate(180%)", WebkitBackdropFilter: "blur(22px) saturate(180%)", border: `1px solid ${C.accent}`, borderRadius: 20, padding: 16, marginBottom: 14, boxShadow: "0 6px 22px rgba(0,0,0,0.14)" }}>
           <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
             <span style=${{ fontSize: 16, fontWeight: 800, color: C.accent }}>🎯 今週のコーチング</span>
             ${data.total > 0 && html`<span style=${{ fontSize: 12, color: C.faint }}>達成 ${data.total}回</span>`}
@@ -1799,7 +1800,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
           else if (r === "fail") { setMsg("共有できませんでした"); setTimeout(() => setMsg(""), 2200); }
         };
         const chip = (label, val) => html`<div style=${{ background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, padding: "5px 9px", fontSize: 12, color: C.sub, lineHeight: 1.3 }}>${label}<br /><b style=${{ color: C.text, fontSize: 13 }}>${val}</b></div>`;
-        return html`<div style=${{ background: `linear-gradient(135deg, ${col}26, ${C.panel})`, border: `1px solid ${col}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
+        return html`<div style=${{ background: `linear-gradient(135deg, ${col}30, ${C.glass})`, backdropFilter: "blur(22px) saturate(180%)", WebkitBackdropFilter: "blur(22px) saturate(180%)", border: `1px solid ${col}`, borderRadius: 20, padding: 16, marginBottom: 14, boxShadow: "0 6px 22px rgba(0,0,0,0.14)" }}>
           <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
             <span style=${{ fontSize: 12, color: C.sub }}>🌙 ${dateLabel} の運氣${name ? `・${name} さん` : ""}</span>
             ${visit && visit.streak > 1 && html`<span style=${{ fontSize: 12, fontWeight: 700, color: C.accent }}>🔥 ${visit.streak}日連続${visit.best > visit.streak ? `（最高${visit.best}）` : ""}</span>`}
@@ -1952,7 +1953,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
           } catch (e) { /* 失敗時は決定論の一節のまま */ } finally { setDeepBusy(false); }
         };
 
-        return html`<div style=${{ background: C.panel, border: `1px solid ${C.accent}66`, borderRadius: 16, padding: "24px 20px", marginBottom: 16, boxShadow: `inset 0 0 0 4px ${C.bg}, inset 0 0 0 5px ${C.accent}44` }}>
+        return html`<div style=${{ background: C.glass, backdropFilter: "blur(22px) saturate(180%)", WebkitBackdropFilter: "blur(22px) saturate(180%)", border: `1px solid ${C.accent}66`, borderRadius: 20, padding: "24px 20px", marginBottom: 16, boxShadow: `inset 0 0 0 4px ${C.bg}, inset 0 0 0 5px ${C.accent}44, 0 6px 22px rgba(0,0,0,0.14)` }}>
           <div style=${{ textAlign: "center", marginBottom: 14 }}>
             <div style=${{ fontSize: 11, color: C.accent, letterSpacing: 6 }}>命式鑑定書</div>
             <div style=${{ ...serif, fontSize: 19, fontWeight: 700, marginTop: 4 }}>${honor}の星の設計図</div>
@@ -2018,7 +2019,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
       function PremiumCTA({ onActive }) {
         if (!BILLING.checkoutUrl && !BILLING.api) return null;
         const trialLine = BILLING.trialDays > 0 ? `${BILLING.trialDays}日間無料、その後 ` : "";
-        return html`<div style=${{ ...card, background: `linear-gradient(135deg, ${C.accent}22, ${C.panel})`, border: `1px solid ${C.accent}`, textAlign: "center" }}>
+        return html`<div style=${{ ...card, background: `linear-gradient(135deg, ${C.accent}26, ${C.glass})`, border: `1px solid ${C.accent}`, textAlign: "center" }}>
           <div style=${{ fontSize: 16, fontWeight: 800, color: C.text, marginBottom: 4 }}>✨ プレミアムで“毎日の指針”をフル解放</div>
           <div style=${{ fontSize: 13, color: C.sub, lineHeight: 1.7, marginBottom: 12 }}>運勢（今日・今月・今年・運命）／占術カレンダー／AI相談・チャット／ネイタル詳細・分野別ガイド。${trialLine}年¥10,000。いつでも解約できます。</div>
           <${SubscribeButton} />
