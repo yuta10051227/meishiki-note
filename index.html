@@ -1009,6 +1009,40 @@
         </div>`;
       }
 
+      // ── むずかしい言葉ミニ辞典（占い用語をふだんの言葉に言いかえる）──
+      const GLOSS = [
+        ["命式（めいしき）", "生まれた年月日と時刻から作る、あなた専用の星の配置図。生まれたときに配られた“手札”のようなものです。手札の良し悪しより、使い方をいっしょに考えるのがこのアプリ。"],
+        ["日干（にっかん）", "生まれた日に割り当てられた10種類の性質のうち、あなたのもの。このアプリではあなたの“核”として、いろんな計算の起点になります。太陽・月・大木・草花…とたとえで呼ぶことが多いです。"],
+        ["干支（かんし）", "年・月・日につく60種類のラベルで、「丙申」のような2文字。年賀状でおなじみの十二支は、この後ろ半分です。"],
+        ["五行（ごぎょう）", "木・火・土・金・水の5タイプで世界を見る、東洋の考え方。相性や運の流れは、この5つの“混ざり方”から読みます。"],
+        ["天中殺（てんちゅうさつ）", "12年のうち2年だけめぐってくる充電期間。「悪い年」ではありません。攻めるより、整理と勉強が実る時期、くらいに受け取ってください。"],
+        ["大運（だいうん）", "10年ごとに切り替わる、人生の大きな季節。いまが種まきの季節なのか、収穫の季節なのかが分かります。"],
+        ["十大主星（じゅうだいしゅせい）", "算命学で性格や才能を表す10種類の星。貫索星・石門星…と名前は硬いですが、中身は「マイペース」「社交家」みたいな個性のラベルです。"],
+        ["十二大従星（じゅうにだいじゅうせい）", "エネルギーの量や状態を表す12種類の星。人生の初年・中年・晩年に1つずつ付いて、その時期の“持久力”を教えてくれます。"],
+        ["人体星図（じんたいせいず）", "星を頭・胸・お腹・左右の手の位置に並べた図。あなたの心の設計図です。どこにどんな星があるかで、考え方の癖が見えます。"],
+        ["ネイタルチャート（出生図）", "生まれた瞬間の空を、そのまま丸い図にしたもの。いわば“生まれたときの星空の写真”。西洋占星術はここから始まります。"],
+        ["ASC（上昇宮）", "生まれた瞬間に東の地平線から昇っていた星座。人からどう見えるか、第一印象の雰囲気にかかわります。出生時刻が分かると正確になります。"],
+        ["ハウス", "出生図を12の部屋に分けたもの。仕事の部屋、恋愛の部屋、お金の部屋…と、人生のテーマごとに担当が決まっています。"],
+        ["トランジット（運行中の星）", "いま現在、空を動いている星のこと。あなたの“星空の写真”に重ねると、今の運勢が読めます。"],
+        ["木星と土星", "西洋占星術の二大タイマー。木星は約12年で空を1周する“追い風”係、土星は約29年で1周する“鍛える”係です。どちらも来ます、順番に。"],
+        ["ナクシャトラ", "インド占星術で使う27種類の星座。月がどこにいたかで決まる、もうひとつの“あなたの星座”です。"],
+        ["ダシャー", "インド占星術の“人生の時間割”。何歳から何歳まで、どの星が担当する期間かを出す仕組みです。"],
+      ];
+      function Glossary() {
+        const [openI, setOpenI] = useState(-1);
+        return html`<div style=${{ display: "flex", flexDirection: "column", gap: 6 }}>
+          ${GLOSS.map(([term, body], i) => {
+            const on = openI === i;
+            return html`<div key=${i} style=${{ background: C.panel2, border: `1px solid ${on ? C.blue : C.line}`, borderRadius: 10, overflow: "hidden" }}>
+              <button className="tap" onClick=${() => { haptic(); setOpenI(on ? -1 : i); }} style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "none", border: "none", color: on ? C.blue : C.text, padding: "10px 13px", fontSize: 13.5, fontWeight: on ? 700 : 500, cursor: "pointer", textAlign: "left" }}>
+                <span>${term}</span><span style=${{ fontSize: 11, color: C.faint }}>${on ? "▲" : "▼"}</span>
+              </button>
+              ${on && html`<div className="tt-in" style=${{ padding: "0 13px 11px", fontSize: 13.5, lineHeight: 1.9, color: C.sub }}>${body}</div>`}
+            </div>`;
+          })}
+        </div>`;
+      }
+
       // ── 根拠・精度の透明性（人の監修に頼らず、計算と方法の開示で信頼を担保）──
       function MethodNote() {
         const li = (t) => html`<div style=${{ display: "flex", gap: 7, fontSize: 12.5, lineHeight: 1.7, color: C.sub, marginBottom: 6 }}><span style=${{ color: C.green }}>✓</span><span>${t}</span></div>`;
@@ -2260,7 +2294,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               ${data.detail && gateP(html`<${Section} title="📜 あなたの鑑定書（毎日ひらく）" color=${C.accent} sub="語り口を選べて、毎日ちがう“今日の一節”と問いが届く鑑定書。あなたの質・五つの星・人生の季節・天中殺・いまの十年まで一続きで読み解きます。" collapsible=${true} defaultOpen=${false}>
                 <${Kanteisho} detail=${data.detail} ten=${data.ten} dai=${data.dai} birth=${birth} apiKey=${apiKey} context=${buildOracleContext(data, birth)} />
               <//>`, "あなたの鑑定書（読み物）")}
-              ${sec.natal !== false && data.chart && gateP(html`<${Section} title="ネイタルチャート（出生図）" color=${C.purple} sub="生まれた瞬間の星空。天体をタップすると、あなたの性格や才能が分かります。" collapsible=${true}>
+              ${sec.natal !== false && data.chart && gateP(html`<${Section} title="ネイタルチャート（出生図）" color=${C.purple} sub="生まれた瞬間の星空を、写真のように丸い図にしたものです。図の中の天体をタップすると、あなたの性格や才能のヒントが読めます。" collapsible=${true}>
                 <${Horoscope} chart=${data.chart} />
               <//>`, "ネイタルチャート（出生図）")}
               ${sec.life !== false && data.chart && gateP(html`<${Section} title="分野別ガイド（仕事・お金・健康ほか）" color=${C.accent} sub="分野ごとの「活かし方・気をつけること・いい時期」をやさしく。" collapsible=${true}>
@@ -2272,16 +2306,16 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             </div>`}
 
             ${view === "fortune" && html`<div>
-              ${sec.wforecast !== false && data.chart && data.transit && gateP(html`<${Section} title="運勢（今日・今月・今年・運命）" color=${C.green} sub="運行中の星をあなたの出生図に重ねた、日・月・年・運命の流れ。">
+              ${sec.wforecast !== false && data.chart && data.transit && gateP(html`<${Section} title="運勢（今日・今月・今年・運命）" color=${C.green} sub="いま空を動いている星を、あなたの“生まれたときの星空”に重ねて、今日・今月・今年・これからの流れを読みます。">
                 <${AstroForecast} natal=${data.chart} transit=${data.transit} birth=${birth} exits=${data.exits} />
               <//>`, "運勢（今日・今月・今年・運命）")}
               ${sec.calendar && data.ten !== undefined && gateP(html`<${Section} title="占いカレンダー" color=${C.blue} sub="日ごとの流れ（攻め／労い／整える／守り）と気をつけたい日。日付タップで詳しく。" collapsible=${true} defaultOpen=${false}>
                 <${Calendar} birth=${birth} ten=${data.ten} onJournalSave=${onJournalSave} />
               <//>`, "占いカレンダー")}
-              ${sec.un && data.un && gateP(html`<${Section} title="今日・今月・今年の運氣（東洋の見方）" color=${C.purple} sub="あなたの日干に、今動いている星を重ねた流れ・動き方。" collapsible=${true} defaultOpen=${false}>
+              ${sec.un && data.un && gateP(html`<${Section} title="今日・今月・今年の運氣（東洋の見方）" color=${C.purple} sub="あなたの核（生まれた日の性質）と、いまめぐっている星の組み合わせから、「今は攻めどきか、休みどきか」が分かります。" collapsible=${true} defaultOpen=${false}>
                 <${Flow} un=${data.un} />
               <//>`, "今日・今月・今年の運氣（東洋の見方）")}
-              ${sec.unsei && (data.ten || data.dai) && gateP(html`<${Section} title="天中殺・大運（人生の流れ・東洋）" color=${C.blue} collapsible=${true} defaultOpen=${false}>
+              ${sec.unsei && (data.ten || data.dai) && gateP(html`<${Section} title="天中殺・大運（人生の流れ・東洋）" color=${C.blue} sub="天中殺は12年に2年めぐる“充電期間”、大運は10年ごとに変わる“人生の季節”。長い目で見る、あなたの運の地図です。" collapsible=${true} defaultOpen=${false}>
                 <${Unsei} ten=${data.ten} dai=${data.dai} />
               <//>`, "天中殺・大運（人生の流れ・東洋）")}
             </div>`}
@@ -2290,7 +2324,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               ${sec.love !== false && data.chart && html`<${Section} title="恋愛・異性への関心" color=${C.red} sub="あなたの恋愛傾向・惹かれるタイプ・恋が動く場面・今の恋の運勢まで。">
                 <${Love} chart=${data.chart} transit=${data.transit} />
               <//>`}
-              ${sec.aishou && html`<${Section} title="相性を見る（2人・東洋）" color=${C.green} collapsible=${true} defaultOpen=${false}>
+              ${sec.aishou && html`<${Section} title="相性を見る（2人・東洋）" color=${C.green} sub="相手の生年月日を入れるだけ。2人の相性を、点数とことばで見られます。" collapsible=${true} defaultOpen=${false}>
                 <${Aishou} birth=${birth} />
               <//>`}
             </div>`}
@@ -2305,7 +2339,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               ${sec.chat && gateP(html`<${Section} title="AIに相談する（占い師チャット）" color=${C.green} sub="あなたの星を踏まえて、占い師に直接相談できます。※相談時のみ内容を Gemini に送信します。">
                 <${Chat} key=${`${birth.date}|${birth.time}|${birth.place}|${editingId || ""}`} apiKey=${apiKey} onSaveKey=${onSaveKey} onClearKey=${onClearKey} context=${buildOracleContext(data, birth)} name=${birth.name} tone=${settings.tone} replyLength=${settings.replyLength} oracleName=${settings.oracleName} />
               <//>`, "AIに相談する（占い師チャット）")}
-              ${sec.astro && data.chart && html`<${Section} title="インド占星術・サイデリアル（補助）" color=${C.accent} sub="ナクシャトラやダシャー（インド式の運勢周期）。" collapsible=${true} defaultOpen=${false}>
+              ${sec.astro && data.chart && html`<${Section} title="インド占星術・サイデリアル（補助）" color=${C.accent} sub="月の位置から見る、もうひとつの占い。ナクシャトラ＝27種類の星座、ダシャー＝人生の時間割です。ことばはミニ辞典にも載せています。" collapsible=${true} defaultOpen=${false}>
                 <${AstroSummary} chart=${data.chart} />
               <//>`}
               <${Section} title="この占いの根拠・精度について" color=${C.blue} sub="人の監修に頼らず、計算方法と根拠の開示で信頼を担保しています。" collapsible=${true} defaultOpen=${false}>
@@ -2313,6 +2347,9 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
               <//>
             </div>`}
 
+            <${Section} title="📖 むずかしい言葉ミニ辞典" color=${C.blue} sub="アプリに出てくる占いのことばを、ふだんの言葉に言いかえました。気になるものをタップ。" collapsible=${true} defaultOpen=${false}>
+              <${Glossary} />
+            <//>
             <div style=${{ fontSize: 11, color: C.faint, textAlign: "center", marginTop: 16, lineHeight: 1.6 }}>占いとして参考程度に。計算・保存はすべて端末内で完結します。AI相談を使う場合のみ、内容を Gemini（Google）に送信します。</div>
           </div>`}
         </div>`;
