@@ -604,12 +604,12 @@
       function Flow({ un }) {
         const stColor = un.day.stance === "攻め" ? C.green : un.day.stance === "守り" ? C.red : un.day.stance === "労い" ? C.blue : C.accent;
         const Period = (label, u, color) => html`<div key=${label} style=${{ background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, padding: "9px 11px", marginBottom: 8 }}>
-          <div style=${{ fontSize: 13, color, fontWeight: 700 }}>${label}　${u.emoji} ${u.star}（${u.ganzhi}）</div>
+          <div style=${{ fontSize: 13, color, fontWeight: 700 }}>${label}　${u.emoji} <${Term} w="重なる星">${u.star}<//>（<${Term} w="干支">${u.ganzhi}<//>）</div>
           <div style=${{ fontSize: 13, lineHeight: 1.6 }}>${u.move}</div>
         </div>`;
         return html`<div>
           <div style=${{ background: stColor + "1A", border: `1px solid ${stColor}`, borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
-            <div style=${{ fontSize: 14, fontWeight: 700, color: stColor, marginBottom: 2 }}>今日 ・ ${un.day.emoji} ${un.day.star}（${un.day.title}） ・ ${un.day.stance}</div>
+            <div style=${{ fontSize: 14, fontWeight: 700, color: stColor, marginBottom: 2 }}>今日 ・ ${un.day.emoji} <${Term} w="重なる星">${un.day.star}<//>（${un.day.title}） ・ <${Term} w=${un.day.stance}>${un.day.stance}<//></div>
             <div style=${{ fontSize: 13, lineHeight: 1.6 }}>${un.day.move}</div>
           </div>
           ${Period("今月", un.month, C.blue)}
@@ -621,12 +621,12 @@
       function Unsei({ ten, dai }) {
         return html`<div>
           ${ten && html`<div style=${{ marginBottom: 12 }}>
-            <div style=${{ fontSize: 14, fontWeight: 700, color: C.blue }}>天中殺：${ten.name}</div>
+            <div style=${{ fontSize: 14, fontWeight: 700, color: C.blue }}><${Term} w="天中殺" />：${ten.name}</div>
             <div style=${{ fontSize: 13, color: C.sub, lineHeight: 1.6, marginTop: 2 }}>${ten.desc}</div>
             ${Array.isArray(ten.years) && ten.years.length > 0 && html`<div style=${{ fontSize: 12, color: C.faint, marginTop: 2 }}>直近の天中殺の年：${ten.years.join(" / ")}年</div>`}
           </div>`}
           ${dai && dai.current && !dai.preStart && html`<div>
-            <div style=${{ fontSize: 14, fontWeight: 700, color: C.purple }}>大運（今この10年）：${dai.current.ganzhi}　${dai.current.star}</div>
+            <div style=${{ fontSize: 14, fontWeight: 700, color: C.purple }}><${Term} w="大運" />（今この10年）：${dai.current.ganzhi}　${dai.current.star}</div>
             <div style=${{ fontSize: 12, color: C.faint }}>${dai.current.ageFrom}〜${dai.current.ageTo}歳${dai.assumed ? "（性別未設定のため順行で仮表示）" : ""}</div>
             <div style=${{ fontSize: 13, lineHeight: 1.6, marginTop: 2 }}>${dai.current.theme}</div>
             <div style=${{ display: "flex", gap: 6, overflowX: "auto", marginTop: 8, paddingBottom: 4 }}>
@@ -637,15 +637,15 @@
               </div>`)}
             </div>
           </div>`}
-          ${dai && dai.preStart && html`<div style=${{ fontSize: 13, color: C.sub }}>大運：立運前（${dai.current ? dai.current.startAge : "—"}歳ごろから始まります）</div>`}
+          ${dai && dai.preStart && html`<div style=${{ fontSize: 13, color: C.sub }}><${Term} w="大運" />：<${Term} w="立運">立運前<//>（${dai.current ? dai.current.startAge : "—"}歳ごろから始まります）</div>`}
         </div>`;
       }
 
       // ── 西洋・インド占星術の要約 ──
       function AstroSummary({ chart }) {
         return html`<div style=${{ fontSize: 13, lineHeight: 1.7, color: C.sub }}>
-          <div><b style=${{ color: C.text }}>インド：</b>月のナクシャトラ ${chart.nakshatra}</div>
-          ${chart.dasha && html`<div><b style=${{ color: C.text }}>ダシャー：</b>${chart.dasha.md}期 中の ${chart.dasha.ad}期${chart.dasha.adRange ? `（${chart.dasha.adRange}）` : ""}</div>`}
+          <div><b style=${{ color: C.text }}>インド：</b>月の<${Term} w="ナクシャトラ" /> ${chart.nakshatra}</div>
+          ${chart.dasha && html`<div><b style=${{ color: C.text }}><${Term} w="ダシャー" />：</b>${chart.dasha.md}期 中の ${chart.dasha.ad}期${chart.dasha.adRange ? `（${chart.dasha.adRange}）` : ""}</div>`}
         </div>`;
       }
 
@@ -960,7 +960,7 @@
         return html`<div style=${{ background: `linear-gradient(135deg, ${C.purple}26, ${C.panel})`, border: `1px solid ${C.purple}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
           <div style=${{ fontSize: 16, fontWeight: 800, marginBottom: 10 }}>✦ あなたという人</div>
           <div style=${{ display: "flex", gap: 8, marginBottom: 12 }}>
-            ${chip("核（太陽）", sun)}${chip("心（月）", moon)}${chip("印象（ASC）", asc)}
+            ${chip("核（太陽）", sun)}${chip("心（月）", moon)}${chip(html`印象（<${Term} w="ASC">ASC<//>）`, asc)}
           </div>
           ${line("🌞", `核は ${SIGN_INFO[sun][0]}座`, SUN_SIGN_TEXT[sun])}
           ${line("🌙", `心は ${SIGN_INFO[moon][0]}座`, MOON_SIGN[moon])}
@@ -1040,6 +1040,35 @@
               ${on && html`<div className="tt-in" style=${{ padding: "0 13px 11px", fontSize: 13.5, lineHeight: 1.9, color: C.sub }}>${body}</div>`}
             </div>`;
           })}
+        </div>`;
+      }
+
+      // ── タップで意味が出る仕組み（点線の言葉に触れると、画面下にやさしい説明カード）──
+      const TERM_DICT = {};
+      GLOSS.forEach(([t, b]) => { TERM_DICT[t.replace(/（.*/, "")] = [t, b]; });
+      const STANCE_EXPLAIN = "きょうの動き方の目安です。「攻め」＝進める日、「守り」＝無理しない日、「整える」＝コツコツ片づける日、「労い」＝休んで充電する日。";
+      Object.assign(TERM_DICT, {
+        スタンス: ["スタンス", STANCE_EXPLAIN],
+        攻め: ["攻め", STANCE_EXPLAIN], 守り: ["守り", STANCE_EXPLAIN], 整える: ["整える", STANCE_EXPLAIN], 労い: ["労い", STANCE_EXPLAIN],
+        重なる星: ["重なる星", "きょうの暦とあなたの核（日干）の組み合わせから出てくる星。今日のあなたに巡ってきた“役回り”のようなものです。"],
+        立運: ["立運（りつうん）", "大運（10年ごとの人生の季節）が始まる年齢のこと。それより前は、季節が始まる前の準備期間です。"],
+        サイデリアル: ["サイデリアル", "実際の星の位置に合わせて計算するインド式のものさし。西洋式と星座が1つ分ほどズレますが、間違いではなく流儀の違いです。"],
+      });
+      function Term({ w, children }) {
+        return html`<span className="tap" onClick=${(e) => { e.stopPropagation(); haptic(); try { window.dispatchEvent(new CustomEvent("explain", { detail: w })); } catch {} }} style=${{ borderBottom: `1px dashed ${C.blue}`, cursor: "pointer" }}>${children || w}</span>`;
+      }
+      function Explainer() {
+        const [key, setKey] = useState("");
+        useEffect(() => { const h = (e) => setKey(e.detail || ""); window.addEventListener("explain", h); return () => window.removeEventListener("explain", h); }, []);
+        if (!key) return null;
+        const hit = TERM_DICT[key];
+        if (!hit) return null;
+        return html`<div className="tt-in" onClick=${() => setKey("")} style=${{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: "calc(88px + env(safe-area-inset-bottom))", zIndex: 60, width: "min(94vw, 560px)", ...glass, borderRadius: 16, padding: "13px 15px", boxShadow: "0 12px 34px rgba(0,0,0,0.35)", cursor: "pointer" }}>
+          <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+            <span style=${{ fontSize: 13.5, fontWeight: 800, color: C.blue }}>📖 ${hit[0]}</span>
+            <span style=${{ fontSize: 12, color: C.faint }}>とじる ✕</span>
+          </div>
+          <div style=${{ fontSize: 13.5, lineHeight: 1.85, color: C.text }}>${hit[1]}</div>
         </div>`;
       }
 
@@ -1847,7 +1876,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             </div>
             ${aiBusy ? html`<span style=${{ fontSize: 13, color: C.faint }}>占っています…</span>` : html`<div style=${{ fontSize: 14, lineHeight: 1.7, color: C.text, whiteSpace: "pre-wrap" }}>${aiText}</div>`}
           </div>`}
-          <div style=${{ fontSize: 20, fontWeight: 800, color: col, marginBottom: 4 }}>${d.emoji} ${d.star} ・ ${d.stance}（${d.ganzhi}）</div>
+          <div style=${{ fontSize: 20, fontWeight: 800, color: col, marginBottom: 4 }}>${d.emoji} <${Term} w="重なる星">${d.star}<//> ・ <${Term} w=${d.stance}>${d.stance}<//>（<${Term} w="干支">${d.ganzhi}<//>）</div>
           <div style=${{ fontSize: 14, lineHeight: 1.7, color: C.text, marginBottom: 10 }}>${d.move}</div>
           <div style=${{ background: col + "14", borderLeft: `3px solid ${col}`, borderRadius: 6, padding: "9px 12px", marginBottom: 10, fontSize: 13.5, lineHeight: 1.7, color: C.text }}>👉 <b>今日の一手</b>：${STANCE_ACT[d.stance] || ""}${lucky ? `${lucky.action}を意識すると追い風。` : ""}<br /><span style=${{ color: C.faint, fontSize: 12.5 }}>🌱 ${tip}</span></div>
           ${lucky && html`<div style=${{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6, marginBottom: 10 }}>
@@ -2278,7 +2307,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             ${view === "today" && html`<div>
               ${data.un && html`<${TodayHero} key=${`${todayKey}|${birth.date}|${birth.time}|${birth.place}|${sampleMode ? "s" : ""}`} un=${data.un} visit=${visit} celebrate=${celebrate} name=${sampleMode ? "" : birth.name} apiKey=${sampleMode ? "" : apiKey} context=${buildOracleContext(data, birth)} birth=${birth} dailyOracle=${settings.dailyOracle} />`}
               ${!birth.timeKnown && html`<div style=${{ fontSize: 13, color: C.accent, background: C.accent + "14", border: `1px solid ${C.accent}55`, borderRadius: 10, padding: "9px 12px", marginBottom: 12, lineHeight: 1.7 }}>
-                出生時刻が未入力のため <b>12:00</b> として計算しています。時刻が分かると、ASC（上昇宮）やハウスがより正確になります。
+                出生時刻が未入力のため <b>12:00</b> として計算しています。時刻が分かると、<${Term} w="ASC">ASC（上昇宮）<//>や<${Term} w="ハウス" />がより正確になります。
               </div>`}
               ${sec.week !== false && data.chart && html`<${Section} title="今週のハイライト" color=${C.green} sub="運行中の月があなたの星を巡る7日間。好機の日・要注意の日をひと目で。">
                 <${WeekHighlight} natal=${data.chart} birth=${birth} />
@@ -2352,6 +2381,7 @@ ${TONE_PROMPTS[tone] || TONE_PROMPTS.gentle} ${LENGTH_PROMPTS[replyLength] || LE
             <//>
             <div style=${{ fontSize: 11, color: C.faint, textAlign: "center", marginTop: 16, lineHeight: 1.6 }}>占いとして参考程度に。計算・保存はすべて端末内で完結します。AI相談を使う場合のみ、内容を Gemini（Google）に送信します。</div>
           </div>`}
+          <${Explainer} />
         </div>`;
       }
 
